@@ -1,0 +1,56 @@
+{
+  "tag": "Pour toi 🩷",
+  "initial": {
+    "note": "",
+    "title": "Joyeux anniversaire !",
+    "subtitle": "Ouvre ton premier cadeau."
+  },
+  "teasers": [
+    {
+      "note": "Et c’est pas fini…",
+      "title": "Un deuxième cadeau, rien que pour toi.",
+      "subtitle": ""
+    },
+    {
+      "note": "Et c’est pas fini…",
+      "title": "Le dernier, et pas des moindres.",
+      "subtitle": ""
+    }
+  ],
+  "reveals": [
+    {
+      "title": "Premier cadeau.",
+      "subtitle": "Tout est là pour commencer."
+    },
+    {
+      "title": "Deuxième cadeau.",
+      "subtitle": "Celui-là, tu l’as déjà entre les mains."
+    },
+    {
+      "title": "Tout est prêt, {name}.",
+      "subtitle": "Il ne te reste plus qu’à importer ton premier dessin."
+    }
+  ],
+  "cards": [
+    {
+      "title": "Un kit stickers",
+      "text": "Feuilles, lame et mode d’emploi : tout est là pour ta première planche.",
+      "pill": "✂️ Le matériel"
+    },
+    {
+      "title": "Ton atelier privé",
+      "text": "Cette application : dépose des images, choisis leurs taille, elle prépare la découpe.",
+      "pill": "🎨 L’application"
+    },
+    {
+      "title": "La Bambu Lab A1 mini",
+      "text": "Elle fabrique tout ce que tu veux, y compris tes planches de stickers.",
+      "pill": "🖨️ Impression 3D + découpe"
+    }
+  ],
+  "buttons": {
+    "open": "Ouvrir le cadeau 🎁",
+    "next": "Encore un cadeau →",
+    "finish": "Entrer dans l’atelier →"
+  }
+}

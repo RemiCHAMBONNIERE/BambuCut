@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>BambuCut - editeur de planche</title>
+<style>
+  :root {
+    --cut: #ff4b4b;
+    --ink: #31333f;
+    --muted: #7a7f8c;
+    --line: #d5d9e0;
+  }
+  * { box-sizing: border-box; }
+  body[data-theme="gift"] {
+    --cut: #ff5c8a;
+    --ink: #332833;
+    --line: #f0dacb;
+  }
+  body[data-theme="gift"] .bar button {
+    border-radius: 999px;
+    border-color: var(--line);
+  }
+  body[data-theme="gift"] .bar button.primary {
+    background: linear-gradient(135deg, #ff7a59, #ff5c8a);
+    border-color: transparent;
+    box-shadow: 0 6px 16px rgba(255, 92, 138, 0.30);
+  }
+  body[data-theme="gift"] .plate {
+    border-color: var(--line);
+    box-shadow: 0 10px 26px rgba(163, 106, 80, 0.10);
+  }
+  body[data-theme="gift"] .legend { color: #9c8a86; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--ink);
+    font-family: "Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI",
+      Roboto, sans-serif;
+  }
+  #app { padding: 0 0 2px; }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 0 0 8px;
+  }
+  .bar button {
+    font: inherit;
+    font-size: 13px;
+    padding: 5px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .bar button.primary {
+    background: var(--cut);
+    border-color: var(--cut);
+    color: #fff;
+    font-weight: 600;
+  }
+  .bar button:disabled { opacity: 0.45; cursor: default; }
+  .status { font-size: 12.5px; color: var(--muted); margin-left: auto; }
+  .wrap { width: 100%; max-width: 900px; margin: 0 auto; }
+  .plate {
+    position: relative;
+    width: 100%;
+    background-color: #fff;
+    border: 1px solid #b9bec7;
+    border-radius: 6px;
+    overflow: hidden;
+    background-image:
+      repeating-linear-gradient(to right, rgba(0, 0, 0, 0.06) 0 1px, transparent 1px var(--gx, 5.55%)),
+      repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.06) 0 1px, transparent 1px var(--gy, 5.55%));
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* La boite elle-meme ne capte rien : seules la zone de deplacement et les
+     poignees recoivent les clics (sinon le dernier sticker bloque les autres). */
+  .stk {
+    position: absolute;
+    outline: 1.5px dashed rgba(255, 75, 75, 0.8);
+    pointer-events: none;
+    container-type: size;
+  }
+  .stk img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+  }
+  .grab {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: auto;
+    cursor: grab;
+    touch-action: none;
+    border-radius: 2px;
+  }
+  .grab:hover { background: rgba(255, 75, 75, 0.07); }
+  .grab:active { cursor: grabbing; }
+  .tag {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 2;
+    max-width: 100%;
+    max-height: calc(100% - 1px);
+    overflow: hidden;
+    padding: 1px 4px;
+    border-radius: 0 0 5px 0;
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+    font-size: 10.5px;
+    line-height: 1.25;
+    color: var(--ink);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+  .tag b { font-weight: 600; }
+  @container (max-height: 30px) {
+    .tag .nm { display: none; }
+  }
+  .h {
+    position: absolute;
+    z-index: 5;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    background: var(--cut);
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    pointer-events: auto;
+    touch-action: none;
+  }
+  .h.nw { left: -7px; top: -7px; cursor: nwse-resize; }
+  .h.ne { right: -7px; top: -7px; cursor: nesw-resize; }
+  .h.sw { left: -7px; bottom: -7px; cursor: nesw-resize; }
+  .h.se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+  .legend {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+  <div id="app">
+    <div class="bar">
+      <button id="apply" class="primary" disabled>&#10003; Appliquer l'&eacute;dition</button>
+      <button id="reset" disabled>&#8634; R&eacute;initialiser</button>
+      <span class="status" id="status">Glissez un sticker pour le d&eacute;placer, ses coins rouges pour le redimensionner.</span>
+    </div>
+    <div class="wrap">
+      <div class="plate" id="plate"></div>
+      <div class="legend">
+        <span id="plateLabel"></span>
+        <span>Grille = 10 mm &middot; cotes en mm, bordure comprise</span>
+      </div>
+    </div>
+  </div>
+<script>
+(function () {
+  "use strict";
+
+  var plateEl = document.getElementById("plate");
+  var statusEl = document.getElementById("status");
+  var applyBtn = document.getElementById("apply");
+  var resetBtn = document.getElementById("reset");
+  var plateLabel = document.getElementById("plateLabel");
+
+  var args = null;
+  var gen = null;
+  var scales = new Map();   // uid -> facteur d'echelle (1 = taille generee)
+  var pos = new Map();      // id de placement -> {cx, cy} en mm
+  var touchedUids = new Set();
+  var touchedIds = new Set();
+  var boxes = [];           // { el, grab, tag, item }
+  var drag = null;
+
+  function post(type, payload) {
+    var msg = { isStreamlitMessage: true, type: type };
+    if (payload) {
+      for (var k in payload) {
+        if (Object.prototype.hasOwnProperty.call(payload, k)) msg[k] = payload[k];
+      }
+    }
+    window.parent.postMessage(msg, "*");
+  }
+
+  function frameHeight() {
+    var h = plateEl.getBoundingClientRect().height;
+    if (!h) return;
+    var total = Math.ceil(document.getElementById("app").getBoundingClientRect().height) + 4;
+    post("streamlit:setFrameHeight", { height: total });
+  }
+
+  post("streamlit:componentReady", { apiVersion: 1 });
+  post("streamlit:setFrameHeight", { height: 420 });
+
+  function num(v) {
+    var n = Number(v);
+    return isFinite(n) ? n : 0;
+  }
+
+  function mm(v) {
+    var r = Math.round(v * 10) / 10;
+    return r % 1 === 0 ? r.toFixed(0) : r.toFixed(1);
+  }
+
+  function shortName(name) {
+    var text = String(name || "").replace(/\.(png|webp|jpe?g|gif|bmp)$/i, "");
+    return text.length > 26 ? text.slice(0, 25) + "\u2026" : text;
+  }
+
+  function esc(text) {
+    return String(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function usable() {
+    var u = args && args.usable;
+    if (u && num(u.w) > 0 && num(u.h) > 0) {
+      return { x0: num(u.x0), y0: num(u.y0), w: num(u.w), h: num(u.h) };
+    }
+    return { x0: 0, y0: 0, w: num(args.plate_w), h: num(args.plate_h) };
+  }
+
+  function clampCenter(cx, cy, w, h) {
+    var u = usable();
+    var x = w >= u.w ? u.x0 + u.w / 2 : Math.min(Math.max(cx, u.x0 + w / 2), u.x0 + u.w - w / 2);
+    var y = h >= u.h ? u.y0 + u.h / 2 : Math.min(Math.max(cy, u.y0 + h / 2), u.y0 + u.h - h / 2);
+    return { cx: x, cy: y };
+  }
+
+  function scaleOf(uid) {
+    return scales.has(uid) ? scales.get(uid) : 1;
+  }
+
+  function centerOf(item) {
+    if (pos.has(item.id)) return pos.get(item.id);
+    return { cx: item.x + item.w / 2, cy: item.y + item.h / 2 };
+  }
+
+  function maxScale(uid) {
+    // Plus grande echelle ou l'objet tient dans la zone utile, quelle que soit
+    // sa position : le centrage est ajuste pendant le redimensionnement.
+    var u = usable();
+    var best = Infinity;
+    for (var i = 0; i < boxes.length; i++) {
+      var it = boxes[i].item;
+      if (it.uid !== uid || !it.w || !it.h) continue;
+      best = Math.min(best, u.w / it.w, u.h / it.h);
+    }
+    if (!isFinite(best) || best <= 0) return 4;
+    return Math.max(0.2, best);
+  }
+
+  function paint(box) {
+    var W = num(args.plate_w);
+    var H = num(args.plate_h);
+    var it = box.item;
+    var s = scaleOf(it.uid);
+    var w = it.w * s;
+    var h = it.h * s;
+    var c = centerOf(it);
+    box.el.style.left = ((c.cx - w / 2) / W) * 100 + "%";
+    box.el.style.top = ((H - c.cy - h / 2) / H) * 100 + "%";
+    box.el.style.width = (w / W) * 100 + "%";
+    box.el.style.height = (h / H) * 100 + "%";
+    box.tag.innerHTML =
+      '<span class="nm"><b>' + esc(shortName(it.name)) + "</b><br></span>" +
+      mm(w) + " &times; " + mm(h) + " mm";
+  }
+
+  function paintUid(uid) {
+    for (var i = 0; i < boxes.length; i++) {
+      if (boxes[i].item.uid === uid) paint(boxes[i]);
+    }
+  }
+
+  function updateButtons() {
+    var touched = new Set();
+    touchedUids.forEach(function (uid) { touched.add(uid); });
+    touchedIds.forEach(function (id) {
+      for (var i = 0; i < boxes.length; i++) {
+        if (boxes[i].item.id === id) touched.add(boxes[i].item.uid);
+      }
+    });
+    var n = touched.size;
+    applyBtn.disabled = n === 0;
+    resetBtn.disabled = n === 0;
+    if (n === 0) {
+      statusEl.textContent =
+        "Glissez un sticker pour le d\u00e9placer, ses coins rouges pour le redimensionner.";
+    } else {
+      statusEl.textContent =
+        n + " sticker(s) modifi\u00e9(s) \u2014 cliquez sur \u00ab Appliquer l'\u00e9dition \u00bb.";
+    }
+  }
+
+  function build() {
+    if (!args || !args.items) return;
+    var W = num(args.plate_w) || 180;
+    var H = num(args.plate_h) || 180;
+
+    plateEl.innerHTML = "";
+    plateEl.style.aspectRatio = W + " / " + H;
+    plateEl.style.setProperty("--gx", (10 / W) * 100 + "%");
+    plateEl.style.setProperty("--gy", (10 / H) * 100 + "%");
+    plateLabel.textContent =
+      "Planche " + args.sheet + "/" + args.total + " \u00b7 " + mm(W) + " \u00d7 " + mm(H) + " mm";
+
+    boxes = [];
+    for (var i = 0; i < args.items.length; i++) {
+      var item = args.items[i];
+      item.x = num(item.x);
+      item.y = num(item.y);
+      item.w = num(item.w);
+      item.h = num(item.h);
+      item.id = String(item.id || i);
+      if (item.w <= 0 || item.h <= 0) continue;
+
+      var el = document.createElement("div");
+      el.className = "stk";
+      el.title = item.name || "";
+
+      var img = document.createElement("img");
+      img.alt = "";
+      img.draggable = false;
+      img.src = item.img || "";
+      el.appendChild(img);
+
+      var tag = document.createElement("div");
+      tag.className = "tag";
+      el.appendChild(tag);
+
+      var grab = document.createElement("div");
+      grab.className = "grab";
+      grab.addEventListener("pointerdown", (function (it) {
+        return function (ev) { startMove(ev, it); };
+      })(item));
+      el.appendChild(grab);
+
+      ["nw", "ne", "sw", "se"].forEach((function (it) {
+        return function (corner) {
+          var handle = document.createElement("div");
+          handle.className = "h " + corner;
+          handle.addEventListener("pointerdown", function (ev) {
+            startResize(ev, it);
+          });
+          el.appendChild(handle);
+        };
+      })(item));
+
+      plateEl.appendChild(el);
+      var box = { el: el, grab: grab, tag: tag, item: item };
+      boxes.push(box);
+      paint(box);
+    }
+
+    updateButtons();
+    requestAnimationFrame(frameHeight);
+  }
+
+  function beginDrag(el) {
+    drag.el = el;
+    el.style.zIndex = "50";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onEnd);
+    window.addEventListener("pointercancel", onEnd);
+  }
+
+  function startMove(ev, item) {
+    if (ev.button !== undefined && ev.button !== 0) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    var host = ev.currentTarget.parentNode;
+    var plateW = plateEl.getBoundingClientRect().width;
+    var perMm = plateW / Math.max(1e-6, num(args.plate_w));
+    var s = scaleOf(item.uid);
+    drag = {
+      mode: "move",
+      item: item,
+      startX: ev.clientX,
+      startY: ev.clientY,
+      perMm: perMm,
+      c0: centerOf(item),
+      w: item.w * s,
+      h: item.h * s
+    };
+    beginDrag(host);
+  }
+
+  function startResize(ev, item) {
+    if (ev.button !== undefined && ev.button !== 0) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    var host = ev.currentTarget.parentNode;
+    var rect = host.getBoundingClientRect();
+    var cx = rect.left + rect.width / 2;
+    var cy = rect.top + rect.height / 2;
+    drag = {
+      mode: "resize",
+      item: item,
+      cx: cx,
+      cy: cy,
+      d0: Math.max(1, Math.hypot(ev.clientX - cx, ev.clientY - cy)),
+      s0: scaleOf(item.uid),
+      smax: maxScale(item.uid)
+    };
+    beginDrag(host);
+  }
+
+  function onMove(ev) {
+    if (!drag) return;
+    ev.preventDefault();
+    if (drag.mode === "move") {
+      var dx = (ev.clientX - drag.startX) / drag.perMm;
+      var dy = -(ev.clientY - drag.startY) / drag.perMm;
+      var c = clampCenter(drag.c0.cx + dx, drag.c0.cy + dy, drag.w, drag.h);
+      pos.set(drag.item.id, c);
+      touchedIds.add(drag.item.id);
+      paintUid(drag.item.uid);
+    } else if (drag.mode === "resize") {
+      var dist = Math.hypot(ev.clientX - drag.cx, ev.clientY - drag.cy);
+      var s = drag.s0 * (dist / drag.d0);
+      if (!isFinite(s)) return;
+      s = Math.max(0.15, Math.min(drag.smax, s));
+      scales.set(drag.item.uid, s);
+      touchedUids.add(drag.item.uid);
+      // Toutes les copies partagent la taille. Si une copie sort de la zone
+      // utile en grandissant, on la recentre juste assez pour l'y ramener.
+      for (var i = 0; i < boxes.length; i++) {
+        var it = boxes[i].item;
+        if (it.uid !== drag.item.uid) continue;
+        var c = centerOf(it);
+        var cc = clampCenter(c.cx, c.cy, it.w * s, it.h * s);
+        if (Math.abs(cc.cx - c.cx) > 1e-6 || Math.abs(cc.cy - c.cy) > 1e-6) {
+          pos.set(it.id, cc);
+          touchedIds.add(it.id);
+        }
+        paint(boxes[i]);
+      }
+    }
+    updateButtons();
+  }
+
+  function onEnd() {
+    if (drag && drag.el) drag.el.style.zIndex = "";
+    drag = null;
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onEnd);
+    window.removeEventListener("pointercancel", onEnd);
+  }
+
+  applyBtn.addEventListener("click", function () {
+    if (!touchedUids.size && !touchedIds.size) return;
+    var scalePayload = {};
+    touchedUids.forEach(function (uid) {
+      scalePayload[uid] = Number(scaleOf(uid).toFixed(4));
+    });
+    var posPayload = {};
+    touchedIds.forEach(function (id) {
+      var c = pos.get(id);
+      if (c) posPayload[id] = { cx: Number(c.cx.toFixed(3)), cy: Number(c.cy.toFixed(3)) };
+    });
+    post("streamlit:setComponentValue", {
+      value: {
+        rev: Date.now(),
+        gen: args.gen,
+        sheet: args.sheet,
+        scales: scalePayload,
+        positions: posPayload
+      },
+      dataType: "json"
+    });
+    touchedUids.clear();
+    touchedIds.clear();
+    updateButtons();
+    statusEl.textContent =
+      "\u00c9dition envoy\u00e9e \u2014 la planche est r\u00e9g\u00e9n\u00e9r\u00e9e.";
+  });
+
+  resetBtn.addEventListener("click", function () {
+    if (!touchedUids.size && !touchedIds.size) return;
+    touchedUids.forEach(function (uid) {
+      scales.set(uid, 1);
+      paintUid(uid);
+    });
+    touchedIds.forEach(function (id) {
+      pos.delete(id);
+    });
+    boxes.forEach(paint);
+    updateButtons();
+  });
+
+  window.addEventListener("message", function (event) {
+    var data = event.data;
+    if (!data || data.type !== "streamlit:render") return;
+    args = data.args || {};
+    document.body.dataset.theme = String(args.theme || "sober");
+    if (args.gen !== gen) {
+      gen = args.gen;
+      scales.clear();
+      pos.clear();
+      touchedUids.clear();
+      touchedIds.clear();
+    }
+    build();
+  });
+
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(function () {
+      frameHeight();
+    }).observe(plateEl);
+  }
+  window.addEventListener("resize", frameHeight);
+  requestAnimationFrame(frameHeight);
+  // L'iframe est d'abord masque (display:none) puis affiche : la premiere
+  // mesure peut valoir 0. On repasse apres l'affichage pour eviter une planche
+  // coupee en bas.
+  [120, 400, 1200].forEach(function (delay) {
+    window.setTimeout(frameHeight, delay);
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>BambuCut - unboxing</title>
+<style>
+  :root {
+    --ink: #332833;
+    --muted: #7d6a72;
+    --coral: #ff7a59;
+    --pink: #ff5c8a;
+    --gold: #ffc861;
+    --mint: #8fd3bf;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--ink);
+    font-family: "Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI",
+      Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  #app { padding: 4px 2px 8px; overflow: hidden; }
+
+  .intro {
+    position: relative;
+    overflow: hidden;
+    border-radius: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    background:
+      radial-gradient(700px 340px at 8% -10%, #FFE4D5 0%, rgba(255, 228, 213, 0) 60%),
+      radial-gradient(700px 380px at 100% 0%, #FFDDE9 0%, rgba(255, 221, 233, 0) 58%),
+      radial-gradient(800px 420px at 50% 120%, #DCF4EC 0%, rgba(220, 244, 236, 0) 62%),
+      #FFFBF7;
+    box-shadow: 0 24px 60px rgba(196, 120, 120, 0.16);
+    padding: 34px 32px 24px;
+    text-align: center;
+    transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+  .intro::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(rgba(255, 138, 91, 0.1) 1px, transparent 1.5px);
+    background-size: 22px 22px;
+    opacity: 0.85;
+  }
+  .intro.leaving { opacity: 0; transform: scale(0.985); }
+
+  /* ---------------- en-tete ---------------- */
+  .head { position: relative; z-index: 2; max-width: 780px; margin: 0 auto; }
+  .note {
+    display: block;
+    margin: 0 auto 0.35rem;
+    font-size: 0.73rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #c2405f;
+  }
+  .note[hidden] { display: none; }
+  h1 {
+    font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+    font-size: clamp(1.75rem, 3.2vw, 2.55rem);
+    line-height: 1.05;
+    letter-spacing: -0.015em;
+    margin: 0 0 0.55rem;
+  }
+  .head p {
+    color: var(--muted);
+    margin: 0 auto;
+    max-width: 62ch;
+    font-size: 0.98rem;
+    line-height: 1.5;
+  }
+  .head p[hidden] { display: none; }
+  .pop { animation: fadeUp 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+  .pop-2 { animation-delay: 0.05s; }
+
+  /* ---------------- scene ---------------- */
+  .stage {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    min-height: 318px;
+    margin-top: 10px;
+  }
+  .gift-scale {
+    grid-area: 1 / 1;
+    display: grid;
+    place-items: center;
+    transition: transform 0.2s ease;
+  }
+  .gift {
+    position: relative;
+    width: 236px;
+    height: 200px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    animation: giftIn 0.85s cubic-bezier(0.2, 0.8, 0.3, 1.15) both;
+    outline: none;
+  }
+  .gift:focus-visible .box { box-shadow: 0 0 0 4px rgba(255, 92, 138, 0.35), 0 22px 44px rgba(255, 92, 138, 0.3); }
+  .box {
+    position: absolute;
+    left: 22px;
+    bottom: 4px;
+    width: 192px;
+    height: 128px;
+    border-radius: 8px 8px 20px 20px;
+    background: linear-gradient(155deg, #ff9676, #ff5c8a);
+    box-shadow:
+      inset 0 -16px 0 rgba(120, 20, 50, 0.1),
+      0 22px 44px rgba(255, 92, 138, 0.3);
+    transition: transform 0.5s 0.35s cubic-bezier(0.3, 0.8, 0.4, 1), opacity 0.5s 0.45s;
+  }
+  .box::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(115deg, rgba(255,255,255,0) 35%, rgba(255,255,255,0.38) 48%, rgba(255,255,255,0) 62%);
+    transform: translateX(-120%);
+    animation: sheen 4.2s 1.2s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .lid {
+    position: absolute;
+    left: 7px;
+    bottom: 126px;
+    width: 222px;
+    height: 54px;
+    border-radius: 14px;
+    background: linear-gradient(155deg, #ffb08c, #ff6f9a);
+    box-shadow: 0 12px 24px rgba(255, 92, 138, 0.24);
+    transform-origin: 18% 100%;
+    transition: transform 0.85s cubic-bezier(0.18, 0.9, 0.24, 1.1), opacity 0.7s 0.2s;
+  }
+  .bow {
+    position: absolute;
+    left: 50%;
+    top: -32px;
+    transform: translateX(-50%);
+    font-size: 46px;
+    line-height: 1;
+    filter: drop-shadow(0 6px 10px rgba(200, 70, 110, 0.28));
+  }
+  .ribbon-v {
+    position: absolute;
+    left: 50%;
+    top: -4px;
+    bottom: 0;
+    width: 28px;
+    margin-left: -14px;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #ffe6a8, #ffc861);
+    box-shadow: inset -3px 0 0 rgba(190, 120, 0, 0.12);
+  }
+  .ribbon-h {
+    position: absolute;
+    left: -5px;
+    right: -5px;
+    top: 34px;
+    height: 22px;
+    background: linear-gradient(90deg, #ffd98d, #ffc861);
+    box-shadow: inset 0 -3px 0 rgba(190, 120, 0, 0.12);
+  }
+  .lid .ribbon-v { top: 0; }
+  .tag {
+    position: absolute;
+    right: -62px;
+    top: 38px;
+    transform: rotate(10deg);
+    background: #ffffff;
+    border: 1px solid #f3d9c9;
+    border-radius: 12px;
+    padding: 8px 12px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #c2405f;
+    box-shadow: 0 10px 20px rgba(163, 106, 80, 0.16);
+    white-space: nowrap;
+    transition: opacity 0.3s ease;
+  }
+  .tag::before {
+    content: "";
+    position: absolute;
+    left: -17px;
+    top: 14px;
+    width: 19px;
+    height: 1px;
+    background: #e7c8b7;
+  }
+  .spark {
+    position: absolute;
+    font-size: 20px;
+    animation: twinkle 2.6s ease-in-out infinite;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .sp1 { left: 12%; top: 30%; }
+  .sp2 { right: 13%; top: 18%; animation-delay: 0.8s; }
+  .sp3 { left: 18%; bottom: 12%; animation-delay: 1.4s; }
+
+  /* ouverture */
+  .intro.opened .lid {
+    transform: translate(-52px, -212px) rotate(-34deg);
+    opacity: 0;
+  }
+  .intro.opened .box {
+    transform: scale(0.93, 0.85) translateY(16px);
+    opacity: 0;
+  }
+  .intro.opened .tag { opacity: 0; }
+  .intro.opened .gift { pointer-events: none; }
+  .intro.opened .spark { opacity: 0; }
+
+  /* retour de la boite pour le cadeau suivant */
+  .gift.still { animation: none; }
+  .gift.again { animation: giftDrop 0.75s cubic-bezier(0.2, 0.8, 0.3, 1.08) both; }
+  .gift.again .lid { transition: none; }
+  .gift.again .box { transition: none; }
+  .gift.again .tag { transition: none; }
+
+  .flash {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 420px;
+    height: 420px;
+    margin: -210px 0 0 -210px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 243, 205, 0.95) 0%, rgba(255, 205, 150, 0.35) 42%, rgba(255, 205, 150, 0) 68%);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .intro.opened .flash { animation: flashOut 0.9s ease-out both; }
+
+  /* ---------------- cartes ---------------- */
+  .reveal {
+    grid-area: 1 / 1;
+    position: relative;
+    z-index: 3;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    pointer-events: none;
+  }
+  .intro.opened .reveal { pointer-events: auto; }
+  .card {
+    position: relative;
+    display: none;
+    align-items: center;
+    gap: 26px;
+    width: 100%;
+    max-width: 720px;
+    background: #ffffff;
+    border: 1px solid #f4e2d6;
+    border-radius: 24px;
+    padding: 22px 26px;
+    text-align: left;
+    box-shadow: 0 16px 36px rgba(163, 106, 80, 0.1);
+  }
+  .intro.opened .card.active {
+    display: flex;
+    animation: cardIn 0.6s 0.32s cubic-bezier(0.2, 0.8, 0.3, 1.08) both;
+  }
+  .intro.leaving-card .reveal {
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+  }
+  .card .art {
+    flex: 0 0 138px;
+    height: 138px;
+    border-radius: 20px;
+    background: linear-gradient(150deg, #fff1e6, #ffe4ee);
+    display: grid;
+    place-items: center;
+  }
+  .card .art svg { height: 112px; width: auto; display: block; }
+  .card .body { flex: 1; min-width: 0; }
+  .card h2 {
+    font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+    font-size: 1.35rem;
+    line-height: 1.15;
+    margin: 0 0 0.4rem;
+    color: #332833;
+  }
+  .card p { font-size: 0.9rem; color: var(--muted); margin: 0; line-height: 1.5; }
+  .card .pill {
+    display: inline-block;
+    margin-top: 0.7rem;
+    padding: 0.22rem 0.62rem;
+    border-radius: 999px;
+    background: #fff2f6;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #c2405f;
+  }
+
+  /* ---------------- actions ---------------- */
+  .actions {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+    min-height: 58px;
+  }
+  button.primary {
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #ffffff;
+    border: none;
+    border-radius: 999px;
+    padding: 0.8rem 1.7rem;
+    background: linear-gradient(135deg, #ff7a59, #ff5c8a);
+    box-shadow: 0 12px 26px rgba(255, 92, 138, 0.32);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  button.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 32px rgba(255, 92, 138, 0.4);
+  }
+  button.primary:active { transform: translateY(0) scale(0.985); }
+  #nextBtn { display: none; }
+  .intro.opened #openBtn { display: none; }
+  .intro.opened #nextBtn {
+    display: inline-block;
+    animation: fadeUp 0.5s 0.45s both;
+  }
+  .buttons { display: flex; align-items: center; justify-content: center; }
+
+  /* ---------------- confettis ---------------- */
+  .confetti {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 6;
+  }
+  .conf {
+    position: absolute;
+    top: -14px;
+    border-radius: 3px;
+    opacity: 0;
+    animation: fall linear forwards;
+  }
+
+  @keyframes giftIn {
+    0% { opacity: 0; transform: translateY(28px) scale(0.9); }
+    100% { opacity: 1; transform: none; }
+  }
+  @keyframes giftDrop {
+    0% { opacity: 0; transform: translateY(-46px) scale(0.9); }
+    62% { opacity: 1; transform: translateY(6px) scale(1.015); }
+    100% { opacity: 1; transform: none; }
+  }
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(22px) scale(0.97); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.25; transform: scale(0.9) rotate(-6deg); }
+    50% { opacity: 1; transform: scale(1.15) rotate(6deg); }
+  }
+  @keyframes sheen {
+    0%, 55% { transform: translateX(-120%); }
+    80%, 100% { transform: translateX(120%); }
+  }
+  @keyframes flashOut {
+    0% { opacity: 0; transform: scale(0.3); }
+    28% { opacity: 1; }
+    100% { opacity: 0; transform: scale(1.35); }
+  }
+  @keyframes fall {
+    0% { opacity: 1; transform: translate3d(0, -10px, 0) rotate(0); }
+    100% { opacity: 0; transform: translate3d(var(--dx, 0px), 520px, 0) rotate(var(--rot, 540deg)); }
+  }
+
+  /* ---------------- telephone : plein ecran, sans cadre ---------------- */
+  @media (max-width: 700px) {
+    html, body { height: 100%; background: #FFFBF7; }
+    #app { padding: 0; min-height: 100%; }
+    .intro {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      padding:
+        max(16px, env(safe-area-inset-top))
+        18px
+        calc(14px + env(safe-area-inset-bottom));
+    }
+    .head { flex: 0 0 auto; }
+    .note { margin-top: 0; font-size: 0.68rem; }
+    h1 { font-size: clamp(1.55rem, 7vw, 2.05rem); margin: 0.4rem 0 0.45rem; }
+    .head p { font-size: 0.94rem; }
+    .stage { flex: 1 1 auto; min-height: 240px; margin-top: 4px; }
+    .gift-scale { transform: scale(0.86); }
+    /* L'etiquette depasse a droite sur grand ecran : on la ramene sur la boite. */
+    .tag {
+      right: -8px;
+      top: 52px;
+      transform: rotate(6deg);
+      padding: 6px 9px;
+      font-size: 0.64rem;
+    }
+    .tag::before { display: none; }
+    .card {
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px;
+      text-align: center;
+      border-radius: 20px;
+    }
+    .card .art { flex: 0 0 auto; width: 100%; height: 112px; }
+    .card .art svg { height: 92px; }
+    .card h2 { font-size: 1.2rem; }
+    .card p { font-size: 0.9rem; }
+    .actions {
+      flex: 0 0 auto;
+      width: 100%;
+      margin-top: 0;
+      padding-top: 8px;
+      min-height: 0;
+    }
+    .buttons, button.primary { width: 100%; }
+    button.primary {
+      padding: 0.9rem 1.2rem;
+      min-height: 52px;
+      font-size: 1.02rem;
+    }
+  }
+  @media (max-width: 380px) {
+    .gift-scale { transform: scale(0.76); }
+    .stage { min-height: 228px; }
+    .card .art { height: 96px; }
+    .card .art svg { height: 80px; }
+    .card { padding: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001s !important;
+      animation-delay: 0s !important;
+      transition-duration: 0.001s !important;
+    }
+  }
+</style>
+</head>
+<body data-theme="gift">
+<div id="app">
+  <div class="intro" id="intro">
+    <div class="confetti" id="confetti" aria-hidden="true"></div>
+
+    <header class="head" aria-live="polite">
+      <span class="note" id="note" hidden>Et c’est pas fini…</span>
+      <h1 id="title">Un cadeau t’attend.</h1>
+      <p id="subtitle">Ouvre-le pour découvrir ce qu’il y a dedans.</p>
+    </header>
+
+    <div class="stage">
+      <div class="flash" aria-hidden="true"></div>
+      <span class="spark sp1" aria-hidden="true">✨</span>
+      <span class="spark sp2" aria-hidden="true">✨</span>
+      <span class="spark sp3" aria-hidden="true">✨</span>
+
+      <div class="gift-scale">
+        <div class="gift" id="gift" role="button" tabindex="0" aria-label="Ouvrir le cadeau">
+          <div class="lid">
+            <span class="bow" aria-hidden="true">🎀</span>
+            <span class="ribbon-v" aria-hidden="true"></span>
+          </div>
+          <div class="box">
+            <span class="ribbon-v" aria-hidden="true"></span>
+            <span class="ribbon-h" aria-hidden="true"></span>
+          </div>
+          <div class="tag" id="tag">Pour toi</div>
+        </div>
+      </div>
+
+      <div class="reveal" id="reveal">
+        <article class="card active" data-step="0">
+          <div class="art" aria-hidden="true">
+            <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <g transform="rotate(-7 58 60)">
+                <rect x="16" y="24" width="70" height="74" rx="9" fill="#ffffff" stroke="#f0dacb" stroke-width="2"/>
+                <rect x="24" y="32" width="54" height="58" rx="6" fill="none" stroke="#ff8a72" stroke-width="1.8" stroke-dasharray="4 3"/>
+                <circle cx="42" cy="50" r="8" fill="#ffc861"/>
+                <rect x="34" y="66" width="18" height="14" rx="5" fill="#ffd9e4"/>
+                <path d="M64 62l7 7-6 6-7-7 6-6Z" fill="#8fd3bf"/>
+              </g>
+              <g transform="rotate(32 92 78)">
+                <rect x="86" y="40" width="12" height="34" rx="5" fill="#332833"/>
+                <path d="M86 74h12l-6 13-6-13Z" fill="#cfd8dc" stroke="#8fa3ad" stroke-width="1.4"/>
+              </g>
+            </svg>
+          </div>
+          <div class="body">
+            <h2>Un kit stickers</h2>
+            <p>Feuilles, lame et mode d’emploi : tout est là pour ta première planche.</p>
+            <span class="pill">✂️ Le matériel</span>
+          </div>
+        </article>
+
+        <article class="card" data-step="1">
+          <div class="art" aria-hidden="true">
+            <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="12" y="20" width="96" height="80" rx="10" fill="#ffffff" stroke="#f0dacb" stroke-width="2"/>
+              <path d="M12 30a10 10 0 0 1 10-10h76a10 10 0 0 1 10 10v8H12v-8Z" fill="#ffe9dc"/>
+              <circle cx="25" cy="29" r="3" fill="#ff8a72"/>
+              <circle cx="34" cy="29" r="3" fill="#ffc861"/>
+              <circle cx="43" cy="29" r="3" fill="#8fd3bf"/>
+              <rect x="23" y="47" width="36" height="35" rx="9" fill="#ffd3a8"/>
+              <circle cx="41" cy="64" r="11" fill="#ff8a5c"/>
+              <path d="M41 56.5l2.3 4.7 5.2.8-3.8 3.7.9 5.2-4.6-2.5-4.6 2.5.9-5.2-3.8-3.7 5.2-.8z" fill="#ffffff"/>
+              <rect x="66" y="47" width="29" height="16" rx="7" fill="#ffd9e4"/>
+              <rect x="66" y="67" width="29" height="15" rx="7" fill="#dff4ed"/>
+            </svg>
+          </div>
+          <div class="body">
+            <h2>L’atelier BambuCut</h2>
+            <p>Cette application : dépose un PNG, choisis la taille, elle prépare le PDF et le G-code.</p>
+            <span class="pill">🎨 L’application</span>
+          </div>
+        </article>
+
+        <article class="card" data-step="2">
+          <div class="art" aria-hidden="true">
+            <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="12" y="94" width="96" height="14" rx="6" fill="#4a3b45"/>
+              <rect x="24" y="28" width="7" height="68" rx="3.5" fill="#b39aa5"/>
+              <rect x="89" y="28" width="7" height="68" rx="3.5" fill="#b39aa5"/>
+              <rect x="24" y="24" width="72" height="8" rx="4" fill="#b39aa5"/>
+              <rect x="46" y="34" width="28" height="18" rx="4" fill="#ff5c8a"/>
+              <rect x="52" y="52" width="16" height="7" rx="2" fill="#ff8a72"/>
+              <path d="M56 59h8l-4 7-4-7Z" fill="#ffc861"/>
+              <rect x="30" y="77" width="60" height="13" rx="3" fill="#efe5df"/>
+              <rect x="33" y="72" width="54" height="8" rx="2" fill="#ffffff" stroke="#e8dcd6"/>
+              <path d="M48 70l2.1 4.3 4.7.7-3.4 3.3.8 4.7-4.2-2.2-4.2 2.2.8-4.7-3.4-3.3 4.7-.7L48 70Z" fill="#ffc861"/>
+              <circle cx="63" cy="76" r="4" fill="#8fd3bf"/>
+              <rect x="71" y="73" width="11" height="6" rx="2" fill="#ffd9e4"/>
+              <circle cx="101" cy="33" r="9" fill="#ff5c8a"/>
+              <circle cx="101" cy="33" r="3" fill="#ffffff"/>
+              <rect x="98" y="42" width="6" height="14" rx="3" fill="#b39aa5"/>
+            </svg>
+          </div>
+          <div class="body">
+            <h2>La Bambu Lab A1 mini</h2>
+            <p>Une vraie imprimante 3D : elle fabrique tout ce que tu veux, et avec le porte-lame elle découpe aussi tes planches de stickers.</p>
+            <span class="pill">🖨️ Impression 3D + découpe</span>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <div class="actions">
+      <div class="buttons">
+        <button id="openBtn" class="primary" type="button">Ouvrir le cadeau 🎁</button>
+        <button id="nextBtn" class="primary" type="button">Encore un cadeau →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var args = {};
+  var sent = false;
+  var busy = false;
+  var index = 0;
+  var opened = false;
+  var interacted = false;
+
+  var intro = document.getElementById("intro");
+  var gift = document.getElementById("gift");
+  var openBtn = document.getElementById("openBtn");
+  var nextBtn = document.getElementById("nextBtn");
+  var confetti = document.getElementById("confetti");
+  var note = document.getElementById("note");
+  var title = document.getElementById("title");
+  var subtitle = document.getElementById("subtitle");
+  var tag = document.getElementById("tag");
+  var cards = Array.prototype.slice.call(document.querySelectorAll(".card"));
+  var lastHeight = 0;
+
+  // Valeurs par defaut : le fichier intro_texts.json les remplace, cle par cle.
+  var DEFAULT_TEXTS = {
+    tag: "Pour {name}",
+    initial: {
+      note: "",
+      title: "Un cadeau t’attend.",
+      subtitle: "Ouvre-le pour découvrir ce qu’il y a dedans."
+    },
+    teasers: [
+      {
+        note: "Et c’est pas fini…",
+        title: "Un deuxième cadeau, rien que pour toi.",
+        subtitle: ""
+      },
+      {
+        note: "Et c’est pas fini…",
+        title: "Le dernier, et pas des moindres.",
+        subtitle: ""
+      }
+    ],
+    reveals: [
+      {
+        title: "Premier cadeau.",
+        subtitle: "Ouvre la boîte : tout est là pour commencer."
+      },
+      {
+        title: "Deuxième cadeau.",
+        subtitle: "Celui-là, tu l’as déjà entre les mains."
+      },
+      {
+        title: "Tout est prêt, {name}.",
+        subtitle: "Il ne te reste plus qu’à importer ton premier dessin."
+      }
+    ],
+    cards: [
+      {
+        title: "Un kit stickers",
+        text: "Feuilles, lame et mode d’emploi : tout est là pour ta première planche.",
+        pill: "✂️ Le matériel"
+      },
+      {
+        title: "L’atelier BambuCut",
+        text: "Cette application : dépose un PNG, choisis la taille, elle prépare le PDF et le G-code.",
+        pill: "🎨 L’application"
+      },
+      {
+        title: "La Bambu Lab A1 mini",
+        text: "Une vraie imprimante 3D : elle fabrique tout ce que tu veux, et avec le porte-lame elle découpe aussi tes planches de stickers.",
+        pill: "🖨️ Impression 3D + découpe"
+      }
+    ],
+    buttons: {
+      open: "Ouvrir le cadeau 🎁",
+      next: "Encore un cadeau →",
+      finish: "Entrer dans l’atelier →"
+    }
+  };
+  var TEXTS = DEFAULT_TEXTS;
+
+  // Copie les valeurs fournies sur les valeurs par defaut, sans jamais casser
+  // une cle manquante (meme logique que bamboo/intro.py).
+  function mergeTexts(defaults, data) {
+    if (Array.isArray(defaults)) {
+      if (!Array.isArray(data)) return defaults.slice();
+      return defaults.map(function (item, i) {
+        return mergeTexts(item, data[i]);
+      });
+    }
+    if (defaults && typeof defaults === "object") {
+      var out = {};
+      for (var key in defaults) {
+        if (Object.prototype.hasOwnProperty.call(defaults, key)) {
+          out[key] = mergeTexts(
+            defaults[key],
+            data && typeof data === "object" ? data[key] : undefined
+          );
+        }
+      }
+      return out;
+    }
+    if (typeof defaults === "string") {
+      return typeof data === "string" ? data : defaults;
+    }
+    return defaults;
+  }
+
+  function recipientName() {
+    return String(args.recipient || "").trim().slice(0, 24);
+  }
+
+  // Remplace {name} par le prenom (et retire la virgule si aucun prenom).
+  function fill(text) {
+    var name = recipientName();
+    var out = String(text == null ? "" : text);
+    if (!name) out = out.replace(/\s*,\s*\{name\}/g, "");
+    return out.replace(/\{name\}/g, name);
+  }
+
+  function makeHead(data) {
+    data = data || {};
+    return {
+      note: fill(data.note || ""),
+      title: fill(data.title || ""),
+      subtitle: fill(data.subtitle || "")
+    };
+  }
+
+  function initialHead() {
+    return makeHead(TEXTS.initial);
+  }
+
+  function revealFor(step) {
+    var list = TEXTS.reveals || [];
+    return makeHead(list[step] || list[list.length - 1]);
+  }
+
+  function teaserFor(step) {
+    var list = TEXTS.teasers || [];
+    return makeHead(list[step] || list[list.length - 1]);
+  }
+
+  function post(type, payload) {
+    var msg = { isStreamlitMessage: true, type: type };
+    if (payload) {
+      for (var key in payload) {
+        if (Object.prototype.hasOwnProperty.call(payload, key)) msg[key] = payload[key];
+      }
+    }
+    window.parent.postMessage(msg, "*");
+  }
+
+  function isMobile() {
+    return window.innerWidth <= 700;
+  }
+
+  // Sur telephone, l'intro doit occuper tout l'ecran : on cale la hauteur du
+  // cadre sur le viewport du parent plutot que sur le contenu (sinon
+  // min-height:100vh ferait grandir le cadre sans fin).
+  function mobileFrameHeight() {
+    if (!isMobile() || !window.parent || window.parent === window) return 0;
+    var parentH = 0;
+    var top = 0;
+    try {
+      parentH = window.parent.innerHeight || 0;
+      if (window.frameElement) {
+        top = window.frameElement.getBoundingClientRect().top || 0;
+      }
+    } catch (err) {
+      return 0;
+    }
+    if (!parentH) return 0;
+    return Math.max(340, Math.floor(parentH - Math.max(0, top)));
+  }
+
+  function frameHeight() {
+    var app = document.getElementById("app");
+    if (!app) return;
+    var h = mobileFrameHeight();
+    if (!h) h = Math.ceil(app.getBoundingClientRect().height) + 6;
+    if (h > 0 && Math.abs(h - lastHeight) > 1) {
+      lastHeight = h;
+      post("streamlit:setFrameHeight", { height: h });
+    }
+  }
+
+  post("streamlit:componentReady", { apiVersion: 1 });
+  post("streamlit:setFrameHeight", { height: 620 });
+
+  function setHead(data) {
+    data = data || {};
+    note.textContent = data.note || "";
+    note.hidden = !data.note;
+    title.textContent = data.title || "";
+    title.hidden = !data.title;
+    subtitle.textContent = data.subtitle || "";
+    subtitle.hidden = !data.subtitle;
+    [note, title, subtitle].forEach(function (el) {
+      el.classList.remove("pop", "pop-2");
+      void el.offsetWidth;
+      if (!el.hidden) el.classList.add("pop");
+      if (el === subtitle) el.classList.add("pop-2");
+    });
+    window.setTimeout(frameHeight, 30);
+  }
+
+  function updateProgress() {
+    cards.forEach(function (card, i) {
+      card.classList.toggle("active", i === index && opened);
+    });
+    var buttons = TEXTS.buttons || {};
+    nextBtn.textContent = fill(
+      index === cards.length - 1
+        ? buttons.finish || "Entrer dans l’atelier →"
+        : buttons.next || "Encore un cadeau →"
+    );
+  }
+
+  function applyTexts() {
+    var list = TEXTS.cards || [];
+    cards.forEach(function (card, i) {
+      var data = list[i];
+      if (!data) return;
+      var heading = card.querySelector("h2");
+      var body = card.querySelector("p");
+      var pill = card.querySelector(".pill");
+      if (heading) {
+        heading.textContent = fill(data.title);
+        heading.hidden = !data.title;
+      }
+      if (body) {
+        body.textContent = fill(data.text);
+        body.hidden = !data.text;
+      }
+      if (pill) {
+        pill.textContent = fill(data.pill);
+        pill.hidden = !data.pill;
+      }
+    });
+
+    var buttons = TEXTS.buttons || {};
+    openBtn.textContent = fill(buttons.open || "Ouvrir le cadeau 🎁");
+    applyRecipient();
+    updateProgress();
+    // Au premier rendu (et tant que rien n'est ouvert), on affiche l'accueil.
+    if (!interacted) setHead(initialHead());
+  }
+
+  function applyRecipient() {
+    var name = recipientName();
+    var raw = typeof TEXTS.tag === "string" ? TEXTS.tag : "";
+    if (!raw.trim()) raw = "Pour {name}";
+    if (name) {
+      tag.textContent = fill(raw);
+      return;
+    }
+    var fallback = raw
+      .replace(/\{name\}/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    tag.textContent = !fallback || fallback === "Pour" ? "Pour toi" : fallback;
+  }
+
+  function spawnConfetti(strength) {
+    var colors = ["#FF7A59", "#FF5C8A", "#FFC861", "#8FD3BF", "#B39DDB"];
+    var count = strength === 3 ? 40 : 26;
+    confetti.innerHTML = "";
+    for (var i = 0; i < count; i++) {
+      var piece = document.createElement("span");
+      piece.className = "conf";
+      piece.style.left = (5 + Math.random() * 90).toFixed(1) + "%";
+      piece.style.background = colors[i % colors.length];
+      piece.style.width = (6 + Math.random() * 6).toFixed(0) + "px";
+      piece.style.height = (10 + Math.random() * 8).toFixed(0) + "px";
+      piece.style.setProperty("--dx", (Math.random() * 200 - 100).toFixed(0) + "px");
+      piece.style.setProperty("--rot", (360 + Math.random() * 480).toFixed(0) + "deg");
+      piece.style.animationDelay = (Math.random() * 0.3).toFixed(2) + "s";
+      piece.style.animationDuration = (1.4 + Math.random() * 0.9).toFixed(2) + "s";
+      confetti.appendChild(piece);
+    }
+    window.setTimeout(function () {
+      confetti.innerHTML = "";
+    }, 3000);
+  }
+
+  function openGift() {
+    if (opened || intro.classList.contains("leaving-card")) return;
+    opened = true;
+    interacted = true;
+    applyRecipient();
+    gift.classList.remove("again");
+    gift.classList.add("still");
+    intro.classList.add("opened");
+    setHead(revealFor(index));
+    updateProgress();
+    spawnConfetti(index + 1);
+    window.setTimeout(frameHeight, 60);
+    window.setTimeout(frameHeight, 420);
+    window.setTimeout(frameHeight, 900);
+  }
+
+  function next() {
+    if (busy) return;
+    if (index >= cards.length - 1) {
+      finish();
+      return;
+    }
+    busy = true;
+    interacted = true;
+    intro.classList.add("leaving-card");
+    window.setTimeout(function () {
+      index += 1;
+      opened = false;
+      intro.classList.remove("opened", "leaving-card");
+      updateProgress();
+      setHead(teaserFor(index - 1));
+      gift.classList.remove("again");
+      void gift.offsetWidth;
+      gift.classList.add("again");
+      busy = false;
+      window.setTimeout(function () {
+        gift.classList.remove("again");
+      }, 780);
+      window.setTimeout(frameHeight, 30);
+      window.setTimeout(frameHeight, 400);
+    }, 220);
+  }
+
+  function finish() {
+    if (sent) return;
+    sent = true;
+    intro.classList.add("leaving");
+    window.setTimeout(function () {
+      post("streamlit:setComponentValue", {
+        value: { done: true, rev: Date.now() },
+        dataType: "json"
+      });
+    }, 200);
+  }
+
+  openBtn.addEventListener("click", openGift);
+  nextBtn.addEventListener("click", next);
+  gift.addEventListener("click", openGift);
+  gift.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openGift();
+    }
+  });
+  window.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") finish();
+    if (!opened) {
+      if (event.key === "Enter" && event.target === document.body) openGift();
+      return;
+    }
+    if (event.key === "ArrowRight") next();
+  });
+
+  window.addEventListener("message", function (event) {
+    var data = event.data;
+    if (!data || data.type !== "streamlit:render") return;
+    args = data.args || {};
+    document.body.dataset.theme = String(args.theme || "gift");
+    TEXTS = mergeTexts(DEFAULT_TEXTS, args.texts);
+    applyTexts();
+    frameHeight();
+    window.setTimeout(frameHeight, 60);
+    window.setTimeout(frameHeight, 300);
+  });
+
+  // La hauteur du cadre s'adapte au contenu (bureau) ou au viewport (telephone).
+  if (typeof ResizeObserver !== "undefined") {
+    var raf = 0;
+    new ResizeObserver(function () {
+      if (raf) return;
+      raf = window.requestAnimationFrame(function () {
+        raf = 0;
+        frameHeight();
+      });
+    }).observe(document.getElementById("app"));
+  }
+  window.addEventListener("resize", function () {
+    frameHeight();
+  });
+  window.addEventListener("orientationchange", function () {
+    window.setTimeout(frameHeight, 250);
+  });
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.addEventListener("resize", function () {
+        frameHeight();
+      });
+    }
+  } catch (err) {
+    /* parent inaccessible : la hauteur du contenu suffit */
+  }
+  requestAnimationFrame(frameHeight);
+  [150, 500, 1200].forEach(function (delay) {
+    window.setTimeout(frameHeight, delay);
+  });
+})();
+</script>
+</body>
+</html>
