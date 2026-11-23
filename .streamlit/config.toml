@@ -11,7 +11,7 @@ gatherUsageStats = false
 
 [server]
 maxUploadSize = 200
-headless = false
+headless = true
 
 [client]
 toolbarMode = "minimal"
