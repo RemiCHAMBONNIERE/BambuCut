@@ -623,10 +623,14 @@ def main() -> int:
             f"G0 X{px:g} Y{py:g} F" in gcode,
             f"{stem} : offsets identiques entre lecteur et G-code",
         )
+        animation_ms = sum(
+            step["travel_ms"] + step["cut_ms"] for step in steps
+        )
         check(
             png_data_url(preview).startswith("data:image/png;base64,")
-            and estimate_seconds(steps, cfg) > 0,
-            f"{stem} : PNG embarque et duree de coupe estimee",
+            and estimate_seconds(steps, cfg) > 0
+            and abs(animation_ms / 1000.0 - estimate_seconds(steps, cfg)) < 0.2,
+            f"{stem} : PNG embarque et duree d'animation = temps estime a 1x",
         )
 
         check(pdf.startswith(b"%PDF"), f"{stem} : PDF valide")
@@ -879,8 +883,11 @@ def main() -> int:
         and 'id="blade"' in cut_html
         and 'id="startMark"' in cut_html
         and "getPointAtLength" in cut_html
-        and "args.calib_x" in cut_html,
-        "lecteur anime : composant local, commandes, lame et depart calibrage",
+        and "args.calib_x" in cut_html
+        and "step.cut_ms" in cut_html
+        and "step.travel_ms" in cut_html
+        and "Math.min(2600" not in cut_html,
+        "lecteur anime : composant, lame, depart calibrage et durees reelles",
     )
     bridge_src = (CUT_DIR.parent / "cut_player.py").read_text(encoding="utf-8")
     check(

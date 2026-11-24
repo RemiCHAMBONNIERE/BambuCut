@@ -25,9 +25,11 @@ et suit exactement le G-code, contour par contour, quand on appuie sur **▶ Lir
 Le **gris** représente les déplacements (lame haute), le **rouge** les coupes, et
 le tracé complet reste affiché en pâle. Lecture, pause, contour précédent /
 suivant, vitesse (0,5× à 4×) et temps estimé permettent de vérifier l'ordre réel
-avant de lancer la découpe. Les longueurs de coupe sont affichées en **cm**.
-Le lecteur et le G-code partagent la même fonction de calcul : aucun risque
-qu'ils se contredisent.
+avant de lancer la découpe. L'animation joue au **temps réel du G-code à 1×**
+(déplacements, descentes de lame et coupe inclus) : à 0,5× elle dure deux fois
+plus longtemps, à 4× quatre fois moins. Les longueurs de coupe sont affichées
+en **cm**. Le lecteur et le G-code partagent la même fonction de calcul : aucun
+risque qu'ils se contredisent.
 
 Un **mode simple** est activé par défaut en habillage **Cadeau** : l'interface
 se limite à l'import, à la génération, au lecteur animé, aux téléchargements et
@@ -284,8 +286,9 @@ Le fichier `intro_texts.json` doit rester à la racine du projet (à côté de
     calibrage (« départ »). « ▶ Lire » lance l'animation, « ⏸ Pause » l'arrête,
     « ⏮ Préc. » / « ⏭ Suiv. » sautent d'un contour à l'autre, et le sélecteur de
     vitesse permet d'accélérer. Le gris est un déplacement lame haute, le rouge
-    une coupe. Le temps affiché est une estimation à la vitesse de coupe réglée ;
-    les longueurs sont en cm.
+    une coupe. Le temps affiché correspond à la durée réelle du trajet à 1×
+    (déplacements, descentes et coupe) ; à 0,5× l'animation dure deux fois plus
+    longtemps. Les longueurs sont en cm.
 11. Téléchargez :
     - **tout le ZIP** avec le bouton « Tout télécharger (.ZIP) » ;
     - ou les fichiers planche par planche.

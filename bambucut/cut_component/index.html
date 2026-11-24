@@ -440,12 +440,16 @@
     return node;
   }
 
+  // Durees calculees cote Python aux vitesses reelles du G-code (1x).
+  // Les valeurs de repli ne servent qu'aux anciens resultats en cache.
   function cutDuration(step) {
-    return Math.min(2600, Math.max(420, num(step.length_mm) * 2.0));
+    if (step.cut_ms != null) return Math.max(80, num(step.cut_ms));
+    return Math.max(80, num(step.length_mm) * 2.0);
   }
 
   function travelDuration(step) {
-    return Math.min(420, Math.max(130, num(step.travel_mm) * 0.8));
+    if (step.travel_ms != null) return Math.max(60, num(step.travel_ms));
+    return Math.max(60, num(step.travel_mm) * 0.8);
   }
 
   function prepare(phase) {
@@ -515,7 +519,7 @@
     phaseIndex = phases.length - 1;
     cursor = phases.length;
     statusEl.textContent = "Terminé · " + steps.length + " contour(s) · " +
-      clock(args.cut_seconds) + " estimés en réel.";
+      clock(args.cut_seconds) + " de trajet à 1×.";
     updateProgress();
     updateButtons();
   }
@@ -646,7 +650,8 @@
     svg.setAttribute("viewBox", "0 0 " + num(args.plate_w) + " " + num(args.plate_h));
     plateLabel.textContent = "Planche " + args.sheet + " · " +
       mm(args.plate_w) + " × " + mm(args.plate_h);
-    timeLabel.textContent = "Temps de coupe estimé : " + clock(args.cut_seconds);
+    timeLabel.textContent = "Temps estimé à 1× : " + clock(args.cut_seconds) +
+      " (déplacements, descentes et coupe)";
 
     steps.forEach(function (step, i) {
       if (step.travel && step.travel.length === 2) {

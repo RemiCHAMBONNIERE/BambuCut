@@ -7,7 +7,9 @@ uniquement à vérifier visuellement la planche avant de lancer une découpe.
 
 Les étapes sont calculées par :func:`bambucut.gcode.iter_cut_contours`, donc le
 lecteur et le G-code partagent exactement la même séquence (offsets compris).
-Aucun npm, aucun réseau : le dossier est servi tel quel par Streamlit.
+Les durées de chaque phase sont calculées aux vitesses réelles configurées, pour
+que « 1× » corresponde au temps estimé affiché. Aucun npm, aucun réseau : le
+dossier est servi tel quel par Streamlit.
 """
 
 from __future__ import annotations
@@ -41,6 +43,26 @@ def png_data_url(png: bytes) -> str:
     return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
 
 
+def _seconds(mm: float, feed_mm_min: float) -> float:
+    """Temps reel (s) pour parcourir ``mm`` a ``feed_mm_min`` mm/min."""
+    return max(0.0, float(mm)) / max(1.0, float(feed_mm_min)) * 60.0
+
+
+def step_durations(cfg: MachineConfig, travel_mm: float, length_mm: float) -> tuple[int, int]:
+    """Durees (ms) d'un deplacement et de la coupe qui suit, aux vitesses reglees.
+
+    La descente et la remontee de lame sont ajoutees a la coupe : c'est la ou
+    la lame reste sur le contour. Le lecteur anime ainsi le trajet complet a
+    vitesse reelle (1x = G-code), sans minimum artificial.
+    """
+    z_move = max(0.0, float(cfg.z_travel_mm) - float(cfg.z_cut_mm))
+    travel_s = _seconds(travel_mm, cfg.feed_travel)
+    cut_s = _seconds(length_mm, cfg.feed_cut)
+    cut_s += _seconds(z_move, cfg.plunge_feed)
+    cut_s += _seconds(z_move, cfg.feed_travel)
+    return round(travel_s * 1000), round(cut_s * 1000)
+
+
 def cut_steps(sheet: Sheet, cfg: MachineConfig) -> list[dict]:
     """Étapes du trajet, dans l'ordre du G-code, avec offsets appliqués."""
     steps: list[dict] = []
@@ -59,12 +81,17 @@ def cut_steps(sheet: Sheet, cfg: MachineConfig) -> list[dict]:
                 [round(float(item["travel_from"][0]), 3), round(float(item["travel_from"][1]), 3)],
                 points[0],
             ]
+        travel_ms, cut_ms = step_durations(
+            cfg, float(item["travel_mm"]), float(item["length_mm"])
+        )
         steps.append(
             {
                 "points": points,
                 "travel": travel,
                 "length_mm": round(float(item["length_mm"]), 2),
                 "travel_mm": round(float(item["travel_mm"]), 2),
+                "travel_ms": travel_ms,
+                "cut_ms": cut_ms,
                 "sticker": int(item["sticker_index"]),
                 "contour": int(item["contour_index"]),
                 "contour_total": int(item["contour_count"]),
@@ -75,10 +102,19 @@ def cut_steps(sheet: Sheet, cfg: MachineConfig) -> list[dict]:
 
 
 def estimate_seconds(steps: list[dict], cfg: MachineConfig) -> float:
-    """Durée réelle approximative de la découpe, à la vitesse configurée."""
-    feed = max(1.0, float(cfg.feed_cut))
-    total = sum(float(step.get("length_mm") or 0.0) for step in steps)
-    return round(total / feed * 60.0, 1)
+    """Duree reelle du trajet anime a 1x (deplacements, Z et coupe inclus)."""
+    total_ms = 0.0
+    for step in steps:
+        if "cut_ms" in step and "travel_ms" in step:
+            total_ms += float(step["cut_ms"]) + float(step["travel_ms"])
+        else:  # resultats autrefois mis en cache : calcul de repli
+            travel_ms, cut_ms = step_durations(
+                cfg,
+                float(step.get("travel_mm") or 0.0),
+                float(step.get("length_mm") or 0.0),
+            )
+            total_ms += travel_ms + cut_ms
+    return round(total_ms / 1000.0, 1)
 
 
 def render_cut_player(
