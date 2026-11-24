@@ -1,0 +1,4 @@
+# Outils hors application (carte QR du carton).
+# L'application Streamlit n'en a pas besoin.
+segno>=1.6
+reportlab>=4.0

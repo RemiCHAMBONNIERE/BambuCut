@@ -1,6 +1,7 @@
 # 🔪 BambuCut — planches de stickers + découpe au traceur (Bambu Lab A1 mini)
 
-Application web **locale** (Streamlit) qui transforme des PNG transparents en :
+Application web **locale ou en ligne** (Streamlit) qui transforme des PNG
+transparents en :
 
 1. **planches imprimables** au format exact du plateau (180 × 180 mm par défaut, 300 DPI) ;
 2. **fichiers G-code de découpe** pour un porte-lame (drag knife) monté sur une
@@ -18,9 +19,31 @@ conservé, chevauchement autorisé pendant l'édition). « Appliquer l'édition 
 régénère les fichiers **en conservant votre disposition** ; un bouton séparé
 relance le placement automatique.
 
+Chaque planche dispose aussi d'un **lecteur de trajectoire animé** : la **lame**
+est visible dès le départ, posée sur la **croix de calibrage** marquée « départ »,
+et suit exactement le G-code, contour par contour, quand on appuie sur **▶ Lire**.
+Le **gris** représente les déplacements (lame haute), le **rouge** les coupes, et
+le tracé complet reste affiché en pâle. Lecture, pause, contour précédent /
+suivant, vitesse (0,5× à 4×) et temps estimé permettent de vérifier l'ordre réel
+avant de lancer la découpe. Les longueurs de coupe sont affichées en **cm**.
+Le lecteur et le G-code partagent la même fonction de calcul : aucun risque
+qu'ils se contredisent.
+
+Un **mode simple** est activé par défaut en habillage **Cadeau** : l'interface
+se limite à l'import, à la génération, au lecteur animé, aux téléchargements et
+au guide. Les réglages avancés, l'éditeur et la longue aide disparaissent ; la
+case **✨ Mode simple** dans la barre latérale permet de revenir à l'atelier
+complet. En habillage **Sobre**, tous les réglages restent toujours visibles.
+
 Aucune ligne de commande n'est nécessaire pour configurer les planches : tout se
 fait à la souris dans le navigateur (import par glisser-déposer, tailles,
 quantités, placement multi-planches, téléchargement ZIP).
+
+Un **guide imprimante** est intégré à l'application (bouton **🖨️ Guide
+imprimante**) : préparation du plateau, calibration de `Z_CUT` et des offsets,
+déroulé d'une découpe, pannes courantes et entretien. Il affiche les réglages
+courants et conseille automatiquement si la garde Z ou les vitesses semblent
+dangereuses.
 
 ---
 
@@ -145,6 +168,12 @@ Le choix et le prénom sont mémorisés dans `ui_prefs.json`, à côté de
 aucune ressource distante n'est chargée, l'application reste utilisable hors
 ligne.
 
+En mode **Cadeau**, la case **✨ Mode simple** est cochée au départ : seuls
+l'import, la génération, les aperçus animés, les téléchargements et le guide
+restent affichés. La décocher révèle l'atelier complet (plateau, calibrage,
+bordure, fond, éditeur, aide détaillée). Ce choix est mémorisé lui aussi dans
+`ui_prefs.json` (`"simple_mode": true` par défaut).
+
 ### Première ouverture : le déballage
 
 Au tout premier lancement en mode **Cadeau**, l'application se présente comme un
@@ -251,7 +280,13 @@ Le fichier `intro_texts.json` doit rester à la racine du projet (à côté de
      la liste et la planche est régénérée **en conservant vos positions** ;
    - **♻️ Recalculer le placement automatique** abandonne la disposition manuelle
      et replace tout proprement (sans chevauchement, espacement respecté).
-10. Consultez les aperçus, puis téléchargez :
+10. **Vérifiez le trajet** sous chaque planche : la lame démarre sur la croix de
+    calibrage (« départ »). « ▶ Lire » lance l'animation, « ⏸ Pause » l'arrête,
+    « ⏮ Préc. » / « ⏭ Suiv. » sautent d'un contour à l'autre, et le sélecteur de
+    vitesse permet d'accélérer. Le gris est un déplacement lame haute, le rouge
+    une coupe. Le temps affiché est une estimation à la vitesse de coupe réglée ;
+    les longueurs sont en cm.
+11. Téléchargez :
     - **tout le ZIP** avec le bouton « Tout télécharger (.ZIP) » ;
     - ou les fichiers planche par planche.
 
@@ -316,6 +351,8 @@ du papier non imprimé et non découpé autour du sticker.
 
 - `G21` (millimètres) + `G90` (coordonnées absolues), origine `(0,0)` en
   **bas à gauche** du plateau ;
+- premier déplacement vers la **croix de calibrage** (`X=10 / Y=10` par défaut)
+  avant la première coupe, pour correspondre à la lame affichée dans l'aperçu ;
 - **aucune** commande de chauffe (`M104`, `M109`, `M140`, `M190`) ;
 - **aucune** extrusion (pas de paramètre `E`) ;
 - **aucun** nivellement automatique (`G29`) ni homing Z ;
@@ -367,9 +404,21 @@ modification externe.
 Si le fichier est absent, l'application utilise les valeurs par défaut. S'il est
 édité à la main, les valeurs sont nettoyées et bornées automatiquement.
 
-L'apparence (thème **Cadeau** / **Sobre** et prénom affiché) est stockée à part
-dans `ui_prefs.json`, pour ne pas mélanger les préférences d'affichage avec les
-réglages machine du `config.json`.
+L'apparence (thème **Cadeau** / **Sobre**, prénom affiché, intro vue et mode
+simple) est stockée à part dans `ui_prefs.json`, pour ne pas mélanger les
+préférences d'affichage avec les réglages machine du `config.json` :
+
+```json
+{
+  "style": "gift",
+  "recipient": "Adèle",
+  "intro_done": true,
+  "simple_mode": true
+}
+```
+
+Modifier `simple_mode` à la main fonctionne aussi : rechargez la page pour que
+le changement soit pris en compte.
 
 ---
 
@@ -406,6 +455,15 @@ réglages machine du `config.json`.
   calibrage vectorielle.
 - **G-code** : nombres à 3 décimales maximum, commentaires ASCII, contrôle de
   sécurité intégré qui refuse toute commande interdite.
+- **Trajet animé** : `iter_cut_contours()` fournit les contours (offsets
+  appliqués) dans l'ordre exact du G-code, en comptant le premier déplacement
+  depuis le repère de calibrage. Le lecteur (`bambucut/cut_component/`)
+  superpose ces tracés sur l'aperçu et les anime en SVG/CSS via l'API Web
+  Animations. La **lame** et le repère de « départ » sont des calques HTML/CSS
+  positionnés depuis les coordonnées SVG, à taille fixe en pixels : la lame
+  reste visible même sur mobile. Le composant ne renvoie aucune valeur à
+  Streamlit. Lecture, pause, saut de contour et vitesse sont pilotés localement,
+  sans npm ni accès réseau.
 
 ### Structure du projet
 
@@ -414,10 +472,13 @@ BambuCut/
 ├── app.py                     # interface Streamlit (toute l'UI)
 ├── bambucut/
 │   ├── config.py              # config.json (lecture/écriture, bornes)
+│   ├── cut_player.py          # pont Streamlit <-> lecteur de trajectoire
+│   ├── cut_component/         # lecteur de coupe animé (HTML/CSS/JS local)
 │   ├── editor.py              # pont Streamlit <-> éditeur d'aperçu
 │   ├── editor_component/      # composant HTML/JS (déplacement + redimensionnement)
 │   ├── geometry.py            # PNG -> silhouette -> bordure -> contour
 │   ├── gcode.py               # génération + contrôle sécurité du G-code
+│   ├── guide.py               # textes du guide imprimante (calibration, pannes)
 │   ├── intro.py               # pont Streamlit <-> écran d'accueil (unboxing)
 │   ├── intro_component/       # scène d'ouverture du cadeau (HTML/CSS/JS local)
 │   ├── models.py              # dataclasses (config, stickers, placements)
@@ -426,9 +487,12 @@ BambuCut/
 │   ├── preview.py             # aperçu PNG (rouge = découpe)
 │   └── theme.py               # habillages cadeau / sobre (CSS local, préférences)
 ├── .streamlit/config.toml     # thème et réglages Streamlit
+├── outils/
+│   └── qr_cadeau.py           # carte A6 + QR code à coller sur le carton
 ├── requirements.txt
+├── requirements-outils.txt    # dépendances du générateur de QR (segno)
 ├── config.json                # réglages machine sauvegardés (créé/modifié par l'app)
-├── ui_prefs.json              # apparence + prénom + intro vue (créé au 1er changement)
+├── ui_prefs.json              # apparence + prénom + intro vue + mode simple
 ├── selftest.py                # tests automatiques de la chaîne complète
 ├── Lancer_BambuCut.bat        # raccourci Windows
 ├── Lancer_BambuCut.command    # raccourci macOS
@@ -447,9 +511,11 @@ une couleur par sticker), la résolution des modes de contour, le passage
 échelle → dimension de l'éditeur, la disposition manuelle (aller-retour des
 positions et rotations, recadrage dans la zone utile, détection des
 chevauchements), le placement (pas de chevauchement, espacement), la taille du
-PDF, l'absence de commandes interdites dans le G-code et les coordonnées,
-ainsi que l'habillage (préférences `ui_prefs.json`, CSS des deux thèmes,
-échappement du prénom et dédicace du ZIP) et l'écran d'ouverture
+PDF, l'absence de commandes interdites dans le G-code et les coordonnées, la
+cohérence du lecteur animé avec le G-code (mêmes contours, mêmes offsets,
+déplacements entre contours) et le protocole de son composant, ainsi que
+l'habillage (préférences `ui_prefs.json` avec `simple_mode`, CSS des deux
+thèmes, échappement du prénom et dédicace du ZIP) et l'écran d'ouverture
 (`intro_component/index.html`, protocole du composant, préférence
 `intro_done`). Les fichiers de contrôle sont écrits dans `_selftest_out/`.
 
@@ -472,7 +538,12 @@ ainsi que l'habillage (préférences `ui_prefs.json`, CSS des deux thèmes,
 | Le G-code est refusé par la machine | vérifiez votre procédure de lancement ; n'ajoutez pas de chauffe ni de `G29`. |
 | L'aperçu affiche un damier sous le sticker | c'est attendu : le damier visualise la transparence (papier). |
 | L'éditeur d'aperçu ne s'affiche pas | rechargez la page (F5) ; le composant est servi localement par Streamlit, aucun accès Internet n'est requis. |
+| Le lecteur de trajectoire reste vide | rechargez la page (Ctrl+F5) ; régénérez les planches si l'aperçu vient d'une version ancienne de l'application. |
+| Les réglages avancés ont disparu | vous êtes en mode **Cadeau / Mode simple** : décochez **✨ Mode simple** dans la barre latérale. |
 | Les stickers se chevauchent dans l'éditeur | c'est autorisé pendant l'édition ; l'avertissement disparaît après **♻️ Recalculer le placement automatique**, ou en les déplaçant dans l'éditeur. |
+| Le lien du QR met du temps à répondre | l'app en ligne était endormie : attendez 30 à 60 secondes, la page se charge ensuite normalement. |
+| Les réglages machine ont disparu en ligne | le serveur a redémarré. Restaurez le `config.json` téléchargé depuis le **guide imprimante** (onglet d'accueil du guide). |
+| Le QR ne se scanne pas | imprimez à 100 %, vérifiez le contraste, évitez le scotch brillant et testez avec plusieurs téléphones. |
 
 ---
 
@@ -490,7 +561,92 @@ ainsi que l'habillage (préférences `ui_prefs.json`, CSS des deux thèmes,
   découpé, mais la bordure est calculée autour de chaque morceau.
 - La découpe suit un polygone : les dégradés très doux et les zones semi-
   transparentes sont traités au seuil alpha de 50 %.
-- L'application est locale : aucune donnée n'est envoyée sur Internet.
+- En local, rien ne sort de l'ordinateur. En ligne, les images transitent par le
+  serveur le temps de la session (elles ne sont pas écrites dans le dépôt), et
+  les réglages `config.json` / `ui_prefs.json` vivent sur ce serveur.
+
+---
+
+## 10. Guide imprimante intégré
+
+Le bouton **🖨️ Guide imprimante** (barre latérale ou bas de la page d'aide)
+ouvre une vue dédiée, en cinq onglets :
+
+| Onglet | Contenu |
+|---|---|
+| **Préparer** | plateau, porte-lame, origine X/Y, alignement de la feuille, test à vide, check-list interactive |
+| **Calibrer** | méthode papier pour `Z_CUT`, réglage des offsets X/Y avec schéma, contrôle de l'échelle |
+| **Découper** | déroulé complet, ce que fait le G-code, consignes de surveillance |
+| **Pannes** | lame qui ne coupe pas, bords déchirés, décalage, feuille qui se soulève, G-code refusé… |
+| **Entretien** | nettoyage, changement de lame, stock, bonnes habitudes |
+
+Le guide lit vos réglages courants (Z, offsets, vitesses), signale une garde
+Z trop faible ou une vitesse de coupe élevée, et permet de **télécharger** ou
+**restaurer** `config.json`. La check-list n'est pas enregistrée : elle est à
+refaire à chaque session, volontairement.
+
+---
+
+## 11. Déployer en ligne et QR code du carton
+
+### Streamlit Community Cloud
+
+L'application est prête pour un hébergement gratuit sur
+[share.streamlit.io](https://share.streamlit.io) :
+
+1. poussez le dossier sur GitHub (`.venv/` et `_selftest_out/` sont déjà ignorés) ;
+2. **New app** → choisissez le dépôt, la branche et `app.py` ;
+3. aucun secret n'est nécessaire, `requirements.txt` suffit.
+
+À savoir avant de mettre le lien sur un carton :
+
+- **Réveil** : une app gratuite s'endort après une période sans visite. Le
+  premier scan peut mettre 30 à 60 secondes ; c'est normal.
+- **Réglages** : `config.json` est écrit sur le serveur. Un redémarrage peut
+  remettre les valeurs du dépôt. Après la calibration, téléchargez le fichier
+  depuis le guide et gardez-le ; rechargez-le si besoin.
+- **Intro** : `ui_prefs.json` est partagé par tous les visiteurs. Une fois
+  l'unboxing terminé, il ne se rejoue pas pour les suivants — pratique pour un
+  cadeau à une seule personne.
+- **Confidentialité** : le lien est public. Les images importées restent en
+  mémoire le temps de la session et ne sont pas écrites dans le dépôt.
+- **Thème** : le sélecteur Cadeau / Sobre reste disponible dans la barre
+  latérale.
+
+### Carte QR à coller sur le premier carton
+
+Un petit script génère le QR code et une carte A6 prête à imprimer (page A4
+avec traits de coupe) :
+
+```bash
+python -m pip install -r requirements-outils.txt
+python outils/qr_cadeau.py "https://votre-app.streamlit.app" --nom "Adèle"
+```
+
+Fichiers produits à côté du script (ou dans `--sortie`) :
+
+- `qr_cadeau.pdf` — carte A6 centrée sur une page A4, avec traits de coupe ;
+- `qr_cadeau_qr.png` — le QR seul, pour l'intégrer à une étiquette ou à un
+  logiciel de mise en page ;
+- `qr_cadeau_qr.svg` — version vectorielle, pour une impression nette.
+
+Conseils : imprimez à **100 %**, scannez la carte avec le téléphone avant de la
+coller, et écrivez l'URL en petit sous le QR (secours si l'appareil photo fait
+des siennes). Le QR doit rester bien à plat et ne pas être recouvert de scotch
+brillant.
+
+### Rester en réseau local (sans hébergement)
+
+Si vous préférez ne rien publier, lancez l'app sur le PC qui reste allumé :
+
+```bash
+.venv\Scripts\python.exe -m streamlit run app.py --server.address 0.0.0.0
+```
+
+Le téléphone doit être sur le **même Wi-Fi**, puis ouvrez
+`http://<IP-du-PC>:8501` (l'IP locale s'affiche dans la fenêtre Streamlit ou via
+`ipconfig`). Le QR pointe alors vers cette adresse : réservez l'IP dans le
+routeur pour qu'elle ne change pas, et gardez le PC allumé.
 
 Bon courage, et faites toujours un **test à vide** avant la première vraie
 découpe. 🔪

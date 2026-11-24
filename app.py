@@ -30,9 +30,26 @@ from bambucut.config import (
     sanitize,
     write_config,
 )
+from bambucut.cut_player import cut_steps, estimate_seconds, render_cut_player
 from bambucut.editor import editor_items, sheet_editor, thumbnail_data_url
 from bambucut.gcode import build_gcode, cut_length_mm, out_of_bounds
 from bambucut.geometry import prepare_sticker
+from bambucut.guide import (
+    CALIBRATE,
+    CHECKLIST,
+    CUT,
+    GUIDE_SUBTITLE,
+    GUIDE_TITLE,
+    MAINTENANCE,
+    OFFSET_IMAGE,
+    PREPARE,
+    SAFETY,
+    SERVER_TIP,
+    TABS,
+    TROUBLESHOOTING,
+    settings_advice,
+    settings_summary,
+)
 from bambucut.intro import INTRO_PAGE_CSS, intro_screen
 from bambucut.models import (
     BG_CUSTOM,
@@ -104,6 +121,8 @@ def init_state() -> None:
     st.session_state.setdefault("recipient", prefs["recipient"])
     st.session_state.setdefault("intro_done", prefs["intro_done"])
     st.session_state.setdefault("intro_run", 0)
+    st.session_state.setdefault("show_guide", False)
+    st.session_state.setdefault("simple_mode", prefs["simple_mode"])
 
     # Au premier affichage d'une session, on recharge automatiquement
     # config.json pour ne pas avoir a re-saisir les reglages machine.
@@ -146,6 +165,13 @@ def current_style() -> str:
     return style if style in STYLES else STYLE_GIFT
 
 
+def simple_view() -> bool:
+    """Mode cadeau épuré : import, génération et guide, sans réglages avancés."""
+    return current_style() == STYLE_GIFT and bool(
+        st.session_state.get("simple_mode", True)
+    )
+
+
 def persist_ui_prefs() -> None:
     """Memorise le style, le prenom et l'etat de l'intro pour les prochaines sessions."""
     save_ui_prefs(
@@ -156,6 +182,9 @@ def persist_ui_prefs() -> None:
             "intro_done": bool(
                 st.session_state.get("intro_done", PREFS["intro_done"])
             ),
+            "simple_mode": bool(
+                st.session_state.get("simple_mode", PREFS["simple_mode"])
+            ),
         },
     )
 
@@ -164,7 +193,13 @@ def replay_intro() -> None:
     """Relance l'unboxing depuis la barre laterale (nouvelle cle de composant)."""
     st.session_state["intro_done"] = False
     st.session_state["intro_run"] = int(st.session_state.get("intro_run", 0)) + 1
+    st.session_state["show_guide"] = False
     persist_ui_prefs()
+
+
+def toggle_guide() -> None:
+    """Bascule entre l'atelier et le guide de l'imprimante."""
+    st.session_state["show_guide"] = not st.session_state.get("show_guide", False)
 
 
 def cfg_from_state() -> MachineConfig:
@@ -217,153 +252,177 @@ def render_sidebar() -> MachineConfig:
             if recipient_name:
                 st.caption(f"🎁 Cadeau pour {recipient_name}")
 
-        with st.expander("📐 Plateau & placement", expanded=True):
-            col_a, col_b = st.columns(2)
-            col_a.number_input(
-                "Largeur (mm)", min_value=50.0, max_value=600.0, step=1.0,
-                format="%.1f", key="cfg_plate_w_mm",
-            )
-            col_b.number_input(
-                "Hauteur (mm)", min_value=50.0, max_value=600.0, step=1.0,
-                format="%.1f", key="cfg_plate_h_mm",
-            )
-            col_c, col_d = st.columns(2)
-            col_c.number_input(
-                "Marge extérieure (mm)", min_value=0.0, max_value=60.0, step=0.5,
-                format="%.1f", key="cfg_margin_mm",
-            )
-            col_d.number_input(
-                "Espacement stickers (mm)", min_value=0.0, max_value=30.0, step=0.5,
-                format="%.1f", key="cfg_spacing_mm",
-            )
-            st.checkbox(
-                "Autoriser la rotation à 90° (optimise le remplissage)",
-                key="cfg_allow_rotation",
-            )
-
-        with st.expander("🩹 Bordures & lissage", expanded=True):
-            st.number_input(
-                "Épaisseur de la bordure blanche (mm)",
-                min_value=0.0, max_value=15.0, step=0.1, format="%.1f",
-                key="cfg_border_mm",
-                help="Buffer géométrique appliqué autour de la silhouette de chaque sticker.",
-            )
-            st.slider(
-                "Lissage du contour (mm)",
-                min_value=0.0, max_value=1.5, step=0.05,
-                key="cfg_simplify_mm",
-                help="Tolérance Douglas-Peucker. Plus la valeur est grande, plus la "
-                     "découpe est fluide (et moins fidèle aux petits détails).",
-            )
-            st.selectbox(
-                "Angles de la bordure",
-                options=[CORNER_ROUND, CORNER_SHARP],
-                format_func=corner_label,
-                key="cfg_corner_style",
-            )
-
-        with st.expander("🎨 Fond & cotes", expanded=True):
-            st.checkbox(
-                "Fond de couleur sous les stickers",
-                key="cfg_bg_enabled",
-                help="Remplit toute la forme découpée (bordure comprise) avec la "
-                     "couleur choisie, puis pose le visuel par-dessus.",
-            )
-            st.color_picker(
-                "Couleur de fond",
-                key="cfg_bg_color",
-                disabled=not st.session_state.cfg_bg_enabled,
-            )
-            st.caption(
-                "La couleur s'arrête exactement au tracé de découpe. "
-                "Chaque sticker peut avoir sa propre couleur (fiche du sticker) ; "
-                "désactivez cette option pour une bordure papier/blanche."
-            )
-            st.checkbox(
-                "Afficher les cotes sur l'aperçu",
-                key="cfg_show_dimensions",
-                help="Affiche la taille finie de chaque sticker (bordure comprise).",
-            )
-            st.checkbox(
-                "Afficher la règle d'échelle",
-                key="cfg_show_scale",
-                help="Ajoute une barre d'échelle en bas à droite de l'aperçu.",
-            )
-
-        with st.expander("🎯 Calibrage Bambu Lab A1 mini", expanded=True):
-            col_e, col_f = st.columns(2)
-            col_e.number_input(
-                "Repère X (mm)", min_value=0.0, max_value=400.0, step=0.5,
-                format="%.1f", key="cfg_calib_x_mm",
-                help="Position de la croix de calibrage, depuis le coin bas-gauche.",
-            )
-            col_f.number_input(
-                "Repère Y (mm)", min_value=0.0, max_value=400.0, step=0.5,
-                format="%.1f", key="cfg_calib_y_mm",
-            )
-            col_g, col_h = st.columns(2)
-            col_g.number_input(
-                "Offset X buse → lame (mm)", min_value=-30.0, max_value=30.0,
-                step=0.1, format="%.2f", key="cfg_offset_x_mm",
-            )
-            col_h.number_input(
-                "Offset Y buse → lame (mm)", min_value=-30.0, max_value=30.0,
-                step=0.1, format="%.2f", key="cfg_offset_y_mm",
-            )
-            st.caption("Le décalage est ajouté à chaque coordonnée de coupe du G-code.")
-
-        with st.expander("🔪 Axe Z & vitesses", expanded=True):
-            col_i, col_j = st.columns(2)
-            col_i.number_input(
-                "Z de coupe (mm)", min_value=0.0, max_value=150.0, step=0.1,
-                format="%.2f", key="cfg_z_cut_mm",
-            )
-            col_j.number_input(
-                "Z de déplacement (mm)", min_value=0.5, max_value=150.0, step=0.1,
-                format="%.2f", key="cfg_z_travel_mm",
-            )
-            col_k, col_l = st.columns(2)
-            col_k.number_input(
-                "Vitesse de coupe (mm/min)", min_value=100, max_value=12000,
-                step=100, key="cfg_feed_cut",
-            )
-            col_l.number_input(
-                "Vitesse de déplacement (mm/min)", min_value=100, max_value=20000,
-                step=100, key="cfg_feed_travel",
-            )
-            st.number_input(
-                "Vitesse de descente de la lame (mm/min)",
-                min_value=50, max_value=5000, step=50, key="cfg_plunge_feed",
-            )
-            st.checkbox(
-                "Inclure `G28 X Y` au début du G-code (homing X/Y seulement)",
-                key="cfg_home_xy",
-                help="Utile si la machine n'est pas déjà homée. Le Z n'est jamais "
-                     "homé automatiquement pour ne pas planter la lame.",
-            )
-
-        st.divider()
-        st.subheader("💾 Configuration")
-        col_save, col_load = st.columns(2)
-        if col_save.button("💾 Enregistrer", help=f"Écrit {CONFIG_FILENAME}"):
-            path = write_config(current_cfg_dict(), CONFIG_FILE)
-            st.success(f"Enregistré dans {path.name}")
-
-        if col_load.button("📂 Charger"):
-            if CONFIG_FILE.exists():
-                st.session_state["_pending_cfg"] = read_config(CONFIG_FILE)
-                st.session_state["_flash"] = "Configuration chargée depuis config.json"
-            else:
-                st.session_state["_flash"] = "Aucun config.json : valeurs par défaut"
-            st.rerun()
-
-        st.download_button(
-            "⬇️ Télécharger config.json",
-            data=config_json_bytes(current_cfg_dict()),
-            file_name=CONFIG_FILENAME,
-            mime="application/json",
+        st.button(
+            "← Retour à l'atelier"
+            if st.session_state.get("show_guide")
+            else "🖨️ Guide imprimante",
+            key="guide_toggle",
+            width="stretch",
+            on_click=toggle_guide,
+            help="Préparer, calibrer et entretenir la Bambu Lab A1 mini.",
         )
-        st.caption(f"Fichier local : `{CONFIG_FILE}`")
+
+        if current_style() == STYLE_GIFT:
+            st.checkbox(
+                "✨ Mode simple",
+                key="simple_mode",
+                on_change=persist_ui_prefs,
+                help="Cache les réglages avancés : import, génération et guide seulement.",
+            )
+
+        if simple_view():
+            st.caption(
+                "Mode simple actif : la planche et la lame sont prêtes. "
+                "Le guide reste accessible si tu veux en savoir plus."
+            )
+        else:
+            with st.expander("📐 Plateau & placement", expanded=True):
+                col_a, col_b = st.columns(2)
+                col_a.number_input(
+                    "Largeur (mm)", min_value=50.0, max_value=600.0, step=1.0,
+                    format="%.1f", key="cfg_plate_w_mm",
+                )
+                col_b.number_input(
+                    "Hauteur (mm)", min_value=50.0, max_value=600.0, step=1.0,
+                    format="%.1f", key="cfg_plate_h_mm",
+                )
+                col_c, col_d = st.columns(2)
+                col_c.number_input(
+                    "Marge extérieure (mm)", min_value=0.0, max_value=60.0, step=0.5,
+                    format="%.1f", key="cfg_margin_mm",
+                )
+                col_d.number_input(
+                    "Espacement stickers (mm)", min_value=0.0, max_value=30.0, step=0.5,
+                    format="%.1f", key="cfg_spacing_mm",
+                )
+                st.checkbox(
+                    "Autoriser la rotation à 90° (optimise le remplissage)",
+                    key="cfg_allow_rotation",
+                )
+
+            with st.expander("🩹 Bordures & lissage", expanded=True):
+                st.number_input(
+                    "Épaisseur de la bordure blanche (mm)",
+                    min_value=0.0, max_value=15.0, step=0.1, format="%.1f",
+                    key="cfg_border_mm",
+                    help="Buffer géométrique appliqué autour de la silhouette de chaque sticker.",
+                )
+                st.slider(
+                    "Lissage du contour (mm)",
+                    min_value=0.0, max_value=1.5, step=0.05,
+                    key="cfg_simplify_mm",
+                    help="Tolérance Douglas-Peucker. Plus la valeur est grande, plus la "
+                         "découpe est fluide (et moins fidèle aux petits détails).",
+                )
+                st.selectbox(
+                    "Angles de la bordure",
+                    options=[CORNER_ROUND, CORNER_SHARP],
+                    format_func=corner_label,
+                    key="cfg_corner_style",
+                )
+
+            with st.expander("🎨 Fond & cotes", expanded=True):
+                st.checkbox(
+                    "Fond de couleur sous les stickers",
+                    key="cfg_bg_enabled",
+                    help="Remplit toute la forme découpée (bordure comprise) avec la "
+                         "couleur choisie, puis pose le visuel par-dessus.",
+                )
+                st.color_picker(
+                    "Couleur de fond",
+                    key="cfg_bg_color",
+                    disabled=not st.session_state.cfg_bg_enabled,
+                )
+                st.caption(
+                    "La couleur s'arrête exactement au tracé de découpe. "
+                    "Chaque sticker peut avoir sa propre couleur (fiche du sticker) ; "
+                    "désactivez cette option pour une bordure papier/blanche."
+                )
+                st.checkbox(
+                    "Afficher les cotes sur l'aperçu",
+                    key="cfg_show_dimensions",
+                    help="Affiche la taille finie de chaque sticker (bordure comprise).",
+                )
+                st.checkbox(
+                    "Afficher la règle d'échelle",
+                    key="cfg_show_scale",
+                    help="Ajoute une barre d'échelle en bas à droite de l'aperçu.",
+                )
+
+            with st.expander("🎯 Calibrage Bambu Lab A1 mini", expanded=True):
+                col_e, col_f = st.columns(2)
+                col_e.number_input(
+                    "Repère X (mm)", min_value=0.0, max_value=400.0, step=0.5,
+                    format="%.1f", key="cfg_calib_x_mm",
+                    help="Position de la croix de calibrage, depuis le coin bas-gauche.",
+                )
+                col_f.number_input(
+                    "Repère Y (mm)", min_value=0.0, max_value=400.0, step=0.5,
+                    format="%.1f", key="cfg_calib_y_mm",
+                )
+                col_g, col_h = st.columns(2)
+                col_g.number_input(
+                    "Offset X buse → lame (mm)", min_value=-30.0, max_value=30.0,
+                    step=0.1, format="%.2f", key="cfg_offset_x_mm",
+                )
+                col_h.number_input(
+                    "Offset Y buse → lame (mm)", min_value=-30.0, max_value=30.0,
+                    step=0.1, format="%.2f", key="cfg_offset_y_mm",
+                )
+                st.caption("Le décalage est ajouté à chaque coordonnée de coupe du G-code.")
+
+            with st.expander("🔪 Axe Z & vitesses", expanded=True):
+                col_i, col_j = st.columns(2)
+                col_i.number_input(
+                    "Z de coupe (mm)", min_value=0.0, max_value=150.0, step=0.1,
+                    format="%.2f", key="cfg_z_cut_mm",
+                )
+                col_j.number_input(
+                    "Z de déplacement (mm)", min_value=0.5, max_value=150.0, step=0.1,
+                    format="%.2f", key="cfg_z_travel_mm",
+                )
+                col_k, col_l = st.columns(2)
+                col_k.number_input(
+                    "Vitesse de coupe (mm/min)", min_value=100, max_value=12000,
+                    step=100, key="cfg_feed_cut",
+                )
+                col_l.number_input(
+                    "Vitesse de déplacement (mm/min)", min_value=100, max_value=20000,
+                    step=100, key="cfg_feed_travel",
+                )
+                st.number_input(
+                    "Vitesse de descente de la lame (mm/min)",
+                    min_value=50, max_value=5000, step=50, key="cfg_plunge_feed",
+                )
+                st.checkbox(
+                    "Inclure `G28 X Y` au début du G-code (homing X/Y seulement)",
+                    key="cfg_home_xy",
+                    help="Utile si la machine n'est pas déjà homée. Le Z n'est jamais "
+                         "homé automatiquement pour ne pas planter la lame.",
+                )
+
+            st.divider()
+            st.subheader("💾 Configuration")
+            col_save, col_load = st.columns(2)
+            if col_save.button("💾 Enregistrer", help=f"Écrit {CONFIG_FILENAME}"):
+                path = write_config(current_cfg_dict(), CONFIG_FILE)
+                st.success(f"Enregistré dans {path.name}")
+
+            if col_load.button("📂 Charger"):
+                if CONFIG_FILE.exists():
+                    st.session_state["_pending_cfg"] = read_config(CONFIG_FILE)
+                    st.session_state["_flash"] = "Configuration chargée depuis config.json"
+                else:
+                    st.session_state["_flash"] = "Aucun config.json : valeurs par défaut"
+                st.rerun()
+
+            st.download_button(
+                "⬇️ Télécharger config.json",
+                data=config_json_bytes(current_cfg_dict()),
+                file_name=CONFIG_FILENAME,
+                mime="application/json",
+            )
+            st.caption(f"Fichier local : `{CONFIG_FILE}`")
 
         cfg = cfg_from_state()
         problems = cfg.problems()
@@ -716,6 +775,7 @@ Impression
 Decoupe
 -------
 - Le G-code ne chauffe pas, n'extrude pas et ne nivelle pas.
+- La machine se place d'abord sur la croix de calibrage avant la 1re coupe.
 - Machine homee, lame montee, Z_CUT/Z_TRAVEL calibres avant lancement.
 - Le programme termine par Z_TRAVEL+20 puis Y175 pour retirer la feuille.
 - Verifiez toujours la premiere planche a vide (Z_TRAVEL haut, sans papier) !
@@ -813,6 +873,7 @@ def generate_planches(
                 "stickers. Déplacez-les dans l'éditeur ou relancez le placement "
                 "automatique."
             )
+        steps = cut_steps(sheet, cfg)
         placements = [
             {
                 "id": f"{sheet.index}:{position}",
@@ -838,6 +899,8 @@ def generate_planches(
                 "gcode": gcode.encode("utf-8"),
                 "preview": preview_png,
                 "placements": placements,
+                "paths": steps,
+                "cut_seconds": estimate_seconds(steps, cfg),
             }
         )
 
@@ -892,6 +955,8 @@ def generate_planches(
         "manual_layout": manual,
         "plate_w_mm": float(cfg.plate_w_mm),
         "plate_h_mm": float(cfg.plate_h_mm),
+        "calib_x_mm": float(cfg.calib_x_mm),
+        "calib_y_mm": float(cfg.calib_y_mm),
     }
 
 
@@ -1062,10 +1127,11 @@ def render_results(cfg: MachineConfig, current_sig: str) -> None:
     col_1.metric("Planches", len(result["sheets"]))
     col_2.metric("Stickers", result["sticker_count"])
     col_3.metric("Occupation moyenne", f"{result['avg_utilization'] * 100:.0f} %")
-    col_4.metric("Longueur de coupe", f"{result['total_cut_mm'] / 1000:.2f} m")
+    col_4.metric("Longueur de coupe", f"{result['total_cut_mm'] / 10:.1f} cm")
 
     st.caption(f"Généré le {result['generated_label']} · réglages figés dans le ZIP.")
 
+    simple = simple_view()
     col_zip, col_auto = st.columns([2.0, 1.6], vertical_alignment="center")
     col_zip.download_button(
         "📦 Tout télécharger (.ZIP)",
@@ -1075,7 +1141,7 @@ def render_results(cfg: MachineConfig, current_sig: str) -> None:
         type="primary",
         key="download_zip_all",
     )
-    if col_auto.button(
+    if not simple and col_auto.button(
         "♻️ Recalculer le placement automatique",
         key="recalc_auto",
         disabled=not result.get("manual_layout"),
@@ -1086,7 +1152,8 @@ def render_results(cfg: MachineConfig, current_sig: str) -> None:
         st.session_state["_regenerate"] = True
         st.rerun()
 
-    render_editor(result, cfg)
+    if not simple:
+        render_editor(result, cfg)
 
     for sheet in result["sheets"]:
         index = sheet["index"]
@@ -1097,13 +1164,28 @@ def render_results(cfg: MachineConfig, current_sig: str) -> None:
             st.caption(
                 f"{sheet['count']} sticker(s) · occupation "
                 f"{sheet['utilization'] * 100:.0f} % · longueur de coupe "
-                f"{sheet['cut_length_mm'] / 1000:.2f} m"
+                f"{sheet['cut_length_mm'] / 10:.1f} cm"
             )
-            st.image(
-                sheet["preview"],
-                caption="Aperçu : rouge = découpe, bleu = calibrage, damier = papier. "
-                        "Cotes en mm, bordure comprise (non imprimées sur le PDF).",
-            )
+            if sheet.get("paths"):
+                render_cut_player(
+                    preview_png=sheet["preview"],
+                    steps=sheet["paths"],
+                    plate_w=result["plate_w_mm"],
+                    plate_h=result["plate_h_mm"],
+                    calib_x=float(result.get("calib_x_mm", 10.0)),
+                    calib_y=float(result.get("calib_y_mm", 10.0)),
+                    cut_seconds=float(sheet.get("cut_seconds") or 0.0),
+                    sheet=index,
+                    theme=current_style(),
+                    key=f"cut_{result['signature'][:10]}_{index}",
+                )
+            else:
+                # Anciens resultats en session : apercu statique (avant mise a jour).
+                st.image(
+                    sheet["preview"],
+                    caption="Aperçu : rouge = découpe, bleu = calibrage, damier = papier. "
+                            "Cotes en mm, bordure comprise (non imprimées sur le PDF).",
+                )
             dl_1, dl_2, dl_3 = st.columns(3)
             dl_1.download_button(
                 "🖨️ PDF impression",
@@ -1152,6 +1234,97 @@ def render_intro(style: str) -> None:
         st.rerun()
 
 
+def render_printer_guide(cfg: MachineConfig) -> None:
+    """Vue dediee : preparation, calibration, decoupe, pannes et entretien."""
+    if st.button("← Retour à l'atelier", key="guide_back"):
+        st.session_state["show_guide"] = False
+        st.rerun()
+
+    st.markdown(f"## {GUIDE_TITLE}")
+    st.caption(GUIDE_SUBTITLE)
+    st.warning(SAFETY, icon="⚠️")
+
+    st.markdown("#### Vos réglages actuels")
+    rows = settings_summary(cfg)
+    for start in range(0, len(rows), 2):
+        columns = st.columns(2)
+        for column, (label, value, help_text) in zip(columns, rows[start : start + 2]):
+            column.metric(label, value, help=help_text)
+
+    problems = cfg.problems()
+    if problems:
+        st.error("Réglages à corriger : " + " ".join(problems))
+    else:
+        guard = cfg.z_travel_mm - cfg.z_cut_mm
+        st.success(
+            f"Réglages cohérents · {guard:.1f} mm de garde entre la coupe et "
+            "le déplacement."
+        )
+    for level, message in settings_advice(cfg):
+        if level == "warning":
+            st.warning(message)
+        else:
+            st.info(message)
+
+    with st.expander("💾 Sauvegarder ou restaurer les réglages"):
+        st.caption(SERVER_TIP)
+        st.download_button(
+            "⬇️ Télécharger config.json",
+            data=config_json_bytes(current_cfg_dict()),
+            file_name=CONFIG_FILENAME,
+            mime="application/json",
+            key="guide_download_cfg",
+        )
+        restored = st.file_uploader(
+            "Restaurer un fichier config.json",
+            type=["json"],
+            key="guide_restore_cfg",
+        )
+        if restored is not None and st.button(
+            "Appliquer ce fichier", key="guide_apply_cfg"
+        ):
+            try:
+                data = json.loads(restored.getvalue().decode("utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                st.error("Ce fichier n'est pas un config.json valide.")
+            else:
+                clean = sanitize(data)
+                st.session_state["_pending_cfg"] = clean
+                try:
+                    write_config(clean, CONFIG_FILE)
+                except OSError:
+                    pass
+                st.session_state["_flash"] = "Réglages restaurés"
+                st.rerun()
+
+    tab_prepare, tab_calibrate, tab_cut, tab_trouble, tab_maintain = st.tabs(
+        list(TABS)
+    )
+    with tab_prepare:
+        st.markdown(PREPARE)
+        st.markdown("#### Check-list avant de lancer")
+        checked = [
+            st.checkbox(label, key=f"guide_check_{index}")
+            for index, label in enumerate(CHECKLIST)
+        ]
+        done = sum(checked)
+        st.progress(done / len(CHECKLIST), text=f"{done}/{len(CHECKLIST)} vérifiés")
+        if done == len(CHECKLIST):
+            st.success("Tout est prêt : vous pouvez lancer la découpe.")
+    with tab_calibrate:
+        st.markdown(CALIBRATE)
+        if OFFSET_IMAGE.exists():
+            st.image(str(OFFSET_IMAGE), width="stretch")
+    with tab_cut:
+        st.markdown(CUT)
+    with tab_trouble:
+        for question, answer in TROUBLESHOOTING:
+            with st.expander(question):
+                st.markdown(answer)
+    with tab_maintain:
+        st.markdown(MAINTENANCE)
+
+
 def main() -> None:
     style = current_style()
     if style == STYLE_GIFT and not st.session_state.get("intro_done"):
@@ -1161,6 +1334,9 @@ def main() -> None:
     cfg = render_sidebar()
     style = current_style()
     st.markdown(theme_css(style), unsafe_allow_html=True)
+    if st.session_state.get("show_guide"):
+        render_printer_guide(cfg)
+        return
     recipient = str(st.session_state.get("recipient", "") or "").strip()[:24]
     st.markdown(hero_html(style, recipient), unsafe_allow_html=True)
 
@@ -1239,9 +1415,29 @@ def main() -> None:
 
     render_results(cfg, signature(cfg, specs) if specs else "vide")
 
-    with st.expander("ℹ️ Mode d'emploi & sécurité"):
-        st.markdown(
-            """
+    if simple_view():
+        with st.expander("❓ Aide rapide"):
+            st.markdown(
+                """
+**Import** — déposez un PNG à fond transparent, puis cliquez sur
+**🚀 Générer les planches**.
+
+**Impression** — imprimez le PDF à **100 % / taille réelle**, sans « ajuster à la
+page ». Vérifiez que la croix de calibrage tombe à 10 mm du coin bas-gauche.
+
+**Découpe** — la lame est dessinée au départ, sur la croix de calibrage. Appuyez sur
+**▶ Lire** pour la suivre, puis lancez le G-code. Gardez la main sur le bouton d'arrêt.
+                """
+            )
+            if st.button(
+                "🖨️ Ouvrir le guide imprimante", key="guide_from_help_simple"
+            ):
+                st.session_state["show_guide"] = True
+                st.rerun()
+    else:
+        with st.expander("ℹ️ Mode d'emploi & sécurité"):
+            st.markdown(
+                """
 **1. Import** — déposez des PNG (fond transparent recommandé). Le ratio de chaque
 image est strictement conservé : une seule dimension est choisie, l'autre est calculée.
 
@@ -1259,6 +1455,12 @@ l'édition. **✓ Appliquer l'édition** reporte les tailles dans la liste et
 régénère la planche en conservant votre disposition ; **♻️ Recalculer le placement
 automatique** replace tout sans chevauchement.
 
+**1 quater. Trajet animé** — sous chaque planche, le lecteur reconstitue exactement
+le mouvement de la machine : la **lame** (repère rouge) part de la **croix de
+calibrage** marquée « départ », puis suit les déplacements en gris et les coupes en
+rouge. Utilisez lecture, pause, contour par contour et vitesse pour vérifier l'ordre
+avant de lancer.
+
 **2. Impression** — le PDF fait exactement la taille du plateau (180 × 180 mm).
 Imprimez à **100 % / taille réelle**, sans « ajuster à la page ». Vérifiez ensuite que
 la croix de calibrage tombe bien à 10 mm / 10 mm du coin bas-gauche.
@@ -1270,8 +1472,11 @@ la croix de calibrage tombe bien à 10 mm / 10 mm du coin bas-gauche.
 **Sécurité** — commencez toujours par un test « à vide » (lame relevée ou papier
 retiré), vérifiez la hauteur de lame sur les quatre coins du plateau, et gardez la main
 sur le bouton d'arrêt. Le Z n'est jamais homé automatiquement par ce fichier.
-            """
-        )
+                """
+            )
+            if st.button("🖨️ Ouvrir le guide imprimante", key="guide_from_help"):
+                st.session_state["show_guide"] = True
+                st.rerun()
 
 
 if __name__ == "__main__":

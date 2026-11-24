@@ -58,6 +58,52 @@ def _outline(points: list[Point], tolerance: float = 0.02) -> list[Point]:
     return clean
 
 
+def iter_cut_contours(sheet: Sheet, cfg: MachineConfig):
+    """Contours de decoupe dans l'ordre exact du G-code, offsets appliques.
+
+    Sert a la fois au G-code et au lecteur anime : les deux voient ainsi la
+    meme sequence de deplacements et de contours. Chaque element decrit aussi
+    le deplacement depuis la fin du contour precedent (lame en l'air).
+    """
+    # La machine part du repère de calibrage imprimé sur la feuille : le premier
+    # élément du trajet est donc le déplacement vers le premier contour.
+    previous_start: Point | None = (cfg.calib_x_mm, cfg.calib_y_mm)
+    for sticker_index, placement in enumerate(sheet.placements, start=1):
+        sticker = placement.sticker
+        for contour_index, contour in enumerate(sticker.outlines_mm, start=1):
+            local = _outline(contour)
+            if len(local) < 3:
+                continue
+            world: list[Point] = [
+                (
+                    placement.x_mm + x + cfg.offset_x_mm,
+                    placement.y_mm + y + cfg.offset_y_mm,
+                )
+                for (x, y) in local
+            ]
+            start = world[0]
+            travel_from = previous_start
+            travel_mm = 0.0
+            if travel_from is not None:
+                travel_mm = math.hypot(
+                    start[0] - travel_from[0], start[1] - travel_from[1]
+                )
+            yield {
+                "sticker_index": sticker_index,
+                "sticker_count": sheet.sticker_count,
+                "name": sticker.name,
+                "width_mm": sticker.width_mm,
+                "height_mm": sticker.height_mm,
+                "contour_index": contour_index,
+                "contour_count": len(sticker.outlines_mm),
+                "points": world,
+                "travel_from": travel_from,
+                "travel_mm": travel_mm,
+                "length_mm": polyline_length_mm(world + [world[0]]),
+            }
+            previous_start = start
+
+
 def build_gcode(
     sheet: Sheet,
     cfg: MachineConfig,
@@ -103,37 +149,36 @@ def build_gcode(
     if cfg.home_xy:
         add("G28 X Y ; homing X/Y uniquement (jamais Z avec la lame)")
     add(f"G1 Z{_fmt(z_travel)} F{f_travel} ; montee en position de securite")
+    add(
+        f"G0 X{_fmt(cfg.calib_x_mm)} Y{_fmt(cfg.calib_y_mm)} F{f_travel}"
+        " ; depart au repere de calibrage"
+    )
 
     # --- Decoupe ---------------------------------------------------------
-    for index, placement in enumerate(sheet.placements, start=1):
-        sticker = placement.sticker
-        add("")
+    current_sticker = 0
+    for item in iter_cut_contours(sheet, cfg):
+        if item["sticker_index"] != current_sticker:
+            current_sticker = item["sticker_index"]
+            add("")
+            add(
+                f"; --- Sticker {current_sticker}/{item['sticker_count']} : "
+                f"{_ascii(item['name'])} "
+                f"[{_fmt(item['width_mm'])} x {_fmt(item['height_mm'])} mm] ---"
+            )
+
+        world = item["points"]
+        # On repart du premier point pour fermer exactement la boucle.
+        sx, sy = world[0]
         add(
-            f"; --- Sticker {index}/{sheet.sticker_count} : {_ascii(sticker.name)} "
-            f"[{_fmt(sticker.width_mm)} x {_fmt(sticker.height_mm)} mm] ---"
+            f"; contour {item['contour_index']}/{item['contour_count']} - "
+            f"{len(world)} points"
         )
-
-        for c_index, contour in enumerate(sticker.outlines_mm, start=1):
-            local = _outline(contour)
-            if len(local) < 3:
-                continue
-            world = [
-                (
-                    placement.x_mm + x + cfg.offset_x_mm,
-                    placement.y_mm + y + cfg.offset_y_mm,
-                )
-                for (x, y) in local
-            ]
-            # On repart du premier point pour fermer exactement la boucle.
-            sx, sy = world[0]
-
-            add(f"; contour {c_index}/{len(sticker.outlines_mm)} - {len(world)} points")
-            add(f"G0 X{_fmt(sx)} Y{_fmt(sy)} F{f_travel}")
-            add(f"G1 Z{_fmt(z_cut)} F{f_plunge} ; descente de la lame")
-            for x, y in world[1:]:
-                add(f"G1 X{_fmt(x)} Y{_fmt(y)} F{f_cut}")
-            add(f"G1 X{_fmt(sx)} Y{_fmt(sy)} F{f_cut} ; fermeture du contour")
-            add(f"G1 Z{_fmt(z_travel)} F{f_travel} ; remontee de la lame")
+        add(f"G0 X{_fmt(sx)} Y{_fmt(sy)} F{f_travel}")
+        add(f"G1 Z{_fmt(z_cut)} F{f_plunge} ; descente de la lame")
+        for x, y in world[1:]:
+            add(f"G1 X{_fmt(x)} Y{_fmt(y)} F{f_cut}")
+        add(f"G1 X{_fmt(sx)} Y{_fmt(sy)} F{f_cut} ; fermeture du contour")
+        add(f"G1 Z{_fmt(z_travel)} F{f_travel} ; remontee de la lame")
 
     # --- Fin de programme ------------------------------------------------
     add("")

@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>BambuCut - lecture du trajet de coupe</title>
+<style>
+  :root {
+    --cut: #e4572e;
+    --travel: #6f7d92;
+    --ink: #31333f;
+    --muted: #7a7f8c;
+    --line: #d5d9e0;
+    --panel: #ffffff;
+  }
+  body[data-theme="gift"] {
+    --cut: #ff5c8a;
+    --travel: #9a7d89;
+    --ink: #332833;
+    --line: #f0dacb;
+    --panel: #fffbf7;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--ink);
+    font-family: "Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI",
+      Roboto, sans-serif;
+  }
+  #app { padding: 0 0 2px; }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 0 0 7px;
+  }
+  .bar button, .bar select {
+    font: inherit;
+    font-size: 12.5px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  body[data-theme="gift"] .bar button.primary {
+    border-radius: 999px;
+    border-color: transparent;
+    background: linear-gradient(135deg, #ff7a59, #ff5c8a);
+    color: #fff;
+    font-weight: 600;
+  }
+  .bar button.primary {
+    background: var(--cut);
+    border-color: var(--cut);
+    color: #fff;
+    font-weight: 600;
+  }
+  .bar button:disabled { opacity: 0.42; cursor: default; }
+  .bar label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .bar select { cursor: pointer; }
+  .status {
+    flex: 1 1 210px;
+    min-width: 0;
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: right;
+  }
+  .progress {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--line);
+    overflow: hidden;
+    margin: 0 0 8px;
+  }
+  .progress > div {
+    height: 100%;
+    width: 0;
+    background: var(--cut);
+    transition: width 0.12s linear;
+  }
+  .stage {
+    position: relative;
+    width: 100%;
+    max-width: 860px;
+    margin: 0 auto;
+    aspect-ratio: var(--ratio, 1);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #fff;
+    overflow: hidden;
+  }
+  body[data-theme="gift"] .stage {
+    box-shadow: 0 10px 26px rgba(163, 106, 80, 0.10);
+  }
+  .stage img, .stage svg {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .stage img { object-fit: fill; }
+  .stage svg { pointer-events: none; }
+  .cut, .travel {
+    fill: none;
+    vector-effect: non-scaling-stroke;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .cut { stroke: var(--cut); stroke-width: 2.1; }
+  .travel { stroke: var(--travel); stroke-width: 1.5; }
+  .ghost.cut { stroke-width: 1.3; opacity: 0.16; }
+  .ghost.travel { stroke-width: 1.1; opacity: 0.20; }
+  .live { visibility: hidden; }
+  .cut.active { stroke-width: 3.2; }
+  .cut.done { opacity: 0.48; }
+  /* Depart (croix de calibrage) et position de la lame, en pixels fixes. */
+  #startMark, #blade {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+  #startMark { z-index: 2; }
+  #blade { z-index: 3; }
+  #startMark .ring {
+    position: absolute;
+    left: -10px;
+    top: -10px;
+    width: 20px;
+    height: 20px;
+    border: 2px dashed #2f6fd0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.78);
+  }
+  #startMark .ring::after {
+    content: "";
+    position: absolute;
+    left: 7px;
+    top: 7px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #2f6fd0;
+  }
+  #startMark .start-label {
+    position: absolute;
+    left: 13px;
+    top: 9px;
+    white-space: nowrap;
+    font-size: 10.5px;
+    color: #2f6fd0;
+    background: rgba(255, 255, 255, 0.88);
+    padding: 1px 4px;
+    border-radius: 4px;
+  }
+  #blade .glyph {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+  }
+  #blade .tip {
+    position: absolute;
+    left: -6px;
+    top: -17px;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 17px solid var(--cut);
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+  }
+  #blade .hub {
+    position: absolute;
+    left: -5px;
+    top: -5px;
+    width: 10px;
+    height: 10px;
+    box-sizing: border-box;
+    border: 2px solid var(--cut);
+    border-radius: 50%;
+    background: #fff;
+  }
+  #blade .blade-label {
+    position: absolute;
+    left: 12px;
+    top: -7px;
+    white-space: nowrap;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--cut);
+    background: rgba(255, 255, 255, 0.9);
+    padding: 1px 4px;
+    border-radius: 4px;
+  }
+  .legend {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    max-width: 860px;
+    margin: 6px auto 0;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  @media (max-width: 520px) {
+    .bar { gap: 4px; }
+    .bar button, .bar select { font-size: 11.5px; padding: 4px 7px; }
+    .status { flex-basis: 100%; text-align: left; }
+    .legend { font-size: 10.5px; }
+  }
+</style>
+</head>
+<body>
+  <div id="app">
+    <div class="bar">
+      <button id="play" class="primary">&#9654; Lire</button>
+      <button id="pause" disabled>&#10074;&#10074; Pause</button>
+      <button id="prev" title="Contour précédent" disabled>&#9198; Préc.</button>
+      <button id="next" title="Contour suivant" disabled>&#9197; Suiv.</button>
+      <button id="reset">&#8634; Recommencer</button>
+      <label>Vitesse
+        <select id="speed">
+          <option value="0.5">0,5&times;</option>
+          <option value="1" selected>1&times;</option>
+          <option value="2">2&times;</option>
+          <option value="4">4&times;</option>
+        </select>
+      </label>
+      <span class="status" id="status">Appuie sur « Lire » pour suivre le trajet de la lame.</span>
+    </div>
+    <div class="progress"><div id="progressBar"></div></div>
+    <div class="stage" id="stage">
+      <img id="sheet" alt="Aperçu de la planche à découper" />
+      <svg id="traj" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+        <g id="ghost"></g>
+        <g id="live"></g>
+      </svg>
+      <div id="startMark" aria-hidden="true">
+        <span class="ring"></span>
+        <span class="start-label">départ · calibrage</span>
+      </div>
+      <div id="blade" aria-hidden="true">
+        <span class="glyph"><span class="tip"></span><span class="hub"></span></span>
+        <span class="blade-label">lame</span>
+      </div>
+    </div>
+    <div class="legend">
+      <span id="plateLabel"></span>
+      <span>&#9688; départ (calibrage) &middot; lame = position actuelle &middot; gris = déplacement &middot; rouge = coupe &middot; tracé complet en pâle.</span>
+      <span id="timeLabel"></span>
+    </div>
+  </div>
+<script>
+(function () {
+  "use strict";
+
+  var appEl = document.getElementById("app");
+  var stage = document.getElementById("stage");
+  var sheetImg = document.getElementById("sheet");
+  var svg = document.getElementById("traj");
+  var ghost = document.getElementById("ghost");
+  var live = document.getElementById("live");
+  var playBtn = document.getElementById("play");
+  var pauseBtn = document.getElementById("pause");
+  var prevBtn = document.getElementById("prev");
+  var nextBtn = document.getElementById("next");
+  var resetBtn = document.getElementById("reset");
+  var speedSel = document.getElementById("speed");
+  var statusEl = document.getElementById("status");
+  var progressBar = document.getElementById("progressBar");
+  var plateLabel = document.getElementById("plateLabel");
+  var timeLabel = document.getElementById("timeLabel");
+  var startMark = document.getElementById("startMark");
+  var blade = document.getElementById("blade");
+  var bladeGlyph = blade.querySelector(".glyph");
+
+  var args = null;
+  var steps = [];
+  var phases = [];
+  var phaseIndex = -1;  // phase en cours d'animation (-1 si aucune)
+  var cursor = 0;       // prochaine phase a lire (ou phase prete apres seek)
+  var anim = null;
+  var currentPhase = null;
+  var bladeLoop = null;
+  var lastPoint = null;
+  var lastAngle = 0;
+  var playing = false;
+  var finished = false;
+  var speed = 1;
+
+  function post(type, payload) {
+    var msg = { isStreamlitMessage: true, type: type };
+    if (payload) {
+      for (var k in payload) {
+        if (Object.prototype.hasOwnProperty.call(payload, k)) msg[k] = payload[k];
+      }
+    }
+    window.parent.postMessage(msg, "*");
+  }
+
+  function frameHeight() {
+    var h = appEl.getBoundingClientRect().height;
+    if (h > 0) post("streamlit:setFrameHeight", { height: Math.ceil(h) + 4 });
+    // La scène est en pixels : recaler les overlays quand sa taille change.
+    repositionOverlays();
+  }
+
+  post("streamlit:componentReady", { apiVersion: 1 });
+  post("streamlit:setFrameHeight", { height: 520 });
+
+  function num(v) {
+    var n = Number(v);
+    return isFinite(n) ? n : 0;
+  }
+
+  function mm(v) {
+    var n = Math.round(num(v) * 10) / 10;
+    return (n % 1 === 0 ? n.toFixed(0) : n.toFixed(1)) + " mm";
+  }
+
+  function clock(seconds) {
+    var s = Math.max(0, Math.round(num(seconds)));
+    var m = Math.floor(s / 60);
+    var r = s % 60;
+    return m + ":" + (r < 10 ? "0" : "") + r;
+  }
+
+  function flip(p) {
+    return [num(p[0]), num(args.plate_h) - num(p[1])];
+  }
+
+  function calibPoint() {
+    var x = args && args.calib_x != null ? num(args.calib_x) : 10;
+    var y = args && args.calib_y != null ? num(args.calib_y) : 10;
+    return { x: x, y: num(args.plate_h) - y };
+  }
+
+  function toPixels(point) {
+    return {
+      x: num(point.x) / Math.max(0.001, num(args.plate_w)) * stage.clientWidth,
+      y: num(point.y) / Math.max(0.001, num(args.plate_h)) * stage.clientHeight,
+    };
+  }
+
+  function placeBlade(point, angle) {
+    var px = toPixels(point);
+    lastPoint = { x: point.x, y: point.y };
+    lastAngle = num(angle);
+    blade.style.left = px.x.toFixed(2) + "px";
+    blade.style.top = px.y.toFixed(2) + "px";
+    bladeGlyph.style.transform = "rotate(" + lastAngle.toFixed(1) + "deg)";
+  }
+
+  function placeStartMark() {
+    var px = toPixels(calibPoint());
+    startMark.style.left = px.x.toFixed(2) + "px";
+    startMark.style.top = px.y.toFixed(2) + "px";
+  }
+
+  function repositionOverlays() {
+    if (!args || !args.steps) return;
+    placeStartMark();
+    if (lastPoint) placeBlade(lastPoint, lastAngle);
+    else bladeAtStart();
+  }
+
+  function bladeAtStart() {
+    placeBlade(calibPoint(), 0);
+  }
+
+  function bladeOnPhase(phase, ratio) {
+    if (!phase || !phase.len) { bladeAtStart(); return; }
+    var r = Math.max(0, Math.min(1, num(ratio)));
+    var at = phase.len * r;
+    var point = phase.el.getPointAtLength(at);
+    var before = phase.el.getPointAtLength(Math.max(0, at - 1.5));
+    var after = phase.el.getPointAtLength(Math.min(phase.len, at + 1.5));
+    var dx = after.x - before.x;
+    var dy = after.y - before.y;
+    var angle = (dx || dy) ? Math.atan2(dy, dx) * 180 / Math.PI + 90 : lastAngle;
+    placeBlade(point, angle);
+  }
+
+  function stopBladeLoop() {
+    if (bladeLoop !== null) {
+      window.cancelAnimationFrame(bladeLoop);
+      bladeLoop = null;
+    }
+  }
+
+  function tickBlade() {
+    bladeLoop = null;
+    var phase = currentPhase;
+    var animation = anim;
+    if (!phase || !animation || animation.playState !== "running") return;
+    var ratio = 1;
+    try {
+      if (animation.currentTime != null) {
+        ratio = num(animation.currentTime) / Math.max(1, phase.duration);
+      }
+    } catch (e) { ratio = 1; }
+    bladeOnPhase(phase, ratio);
+    bladeLoop = window.requestAnimationFrame(tickBlade);
+  }
+
+  function startBladeLoop() {
+    if (bladeLoop === null && currentPhase && anim) {
+      bladeLoop = window.requestAnimationFrame(tickBlade);
+    }
+  }
+
+  function pathD(points) {
+    var out = [];
+    for (var i = 0; i < points.length; i++) {
+      var p = flip(points[i]);
+      out.push((i ? "L" : "M") + p[0].toFixed(3) + " " + p[1].toFixed(3));
+    }
+    return out.join(" ");
+  }
+
+  function el(tag, cls, d) {
+    var node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    node.setAttribute("class", cls);
+    node.setAttribute("d", d);
+    return node;
+  }
+
+  function cutDuration(step) {
+    return Math.min(2600, Math.max(420, num(step.length_mm) * 2.0));
+  }
+
+  function travelDuration(step) {
+    return Math.min(420, Math.max(130, num(step.travel_mm) * 0.8));
+  }
+
+  function prepare(phase) {
+    phase.len = phase.el.getTotalLength();
+    phase.el.style.strokeDasharray = phase.len + " " + phase.len;
+    phase.el.style.strokeDashoffset = phase.len;
+    phase.el.style.visibility = "hidden";
+  }
+
+  function phaseText(phase) {
+    var step = phase.step;
+    var n = step.contour + "/" + step.contour_total;
+    if (phase.kind === "travel") {
+      return "Déplacement vers le contour " + n + " · " + mm(step.travel_mm);
+    }
+    return "Découpe " + n + " · " + String(step.name || "sticker") +
+      " · " + mm(step.length_mm);
+  }
+
+  function contourOfPhase(i) {
+    return phases[i] ? phases[i].stepIndex : steps.length;
+  }
+
+  function currentStep() {
+    if (!phases.length) return -1;
+    return contourOfPhase(Math.min(cursor, phases.length - 1));
+  }
+
+  function firstPhaseOf(contour) {
+    for (var i = 0; i < phases.length; i++) {
+      if (phases[i].stepIndex === contour) return i;
+    }
+    return phases.length;
+  }
+
+  function updateProgress() {
+    var ratio = finished ? 1 : Math.max(0, cursor) / Math.max(1, phases.length);
+    progressBar.style.width = (ratio * 100).toFixed(1) + "%";
+  }
+
+  function updateButtons() {
+    var cur = currentStep();
+    playBtn.textContent = finished
+      ? "\u21bb Rejouer"
+      : (anim && anim.playState === "paused" ? "\u25b6 Reprendre" : "\u25b6 Lire");
+    pauseBtn.disabled = !(anim && anim.playState === "running");
+    prevBtn.disabled = finished || cur <= 0;
+    nextBtn.disabled = finished || cur >= steps.length - 1;
+  }
+
+  function cancelAnim() {
+    stopBladeLoop();
+    currentPhase = null;
+    if (!anim) return;
+    var old = anim;
+    anim = null;
+    old.onfinish = null;
+    try { old.cancel(); } catch (e) {}
+  }
+
+  function finish() {
+    var last = currentPhase || phases[phases.length - 1];
+    cancelAnim();
+    if (last) bladeOnPhase(last, 1); else bladeAtStart();
+    playing = false;
+    finished = true;
+    phaseIndex = phases.length - 1;
+    cursor = phases.length;
+    statusEl.textContent = "Terminé · " + steps.length + " contour(s) · " +
+      clock(args.cut_seconds) + " estimés en réel.";
+    updateProgress();
+    updateButtons();
+  }
+
+  function startPhase(i) {
+    cancelAnim();
+    if (i >= phases.length) { finish(); return; }
+    phaseIndex = i;
+    cursor = i;
+    var phase = phases[i];
+    currentPhase = phase;
+    bladeOnPhase(phase, 0);
+    for (var j = 0; j < phases.length; j++) phases[j].el.classList.remove("active");
+    phase.el.classList.add("active");
+    phase.el.style.visibility = "visible";
+    phase.el.style.strokeDashoffset = phase.len;
+    statusEl.textContent = phaseText(phase);
+
+    anim = phase.el.animate(
+      [{ strokeDashoffset: phase.len }, { strokeDashoffset: 0 }],
+      { duration: phase.duration, easing: "linear", fill: "forwards" }
+    );
+    anim.playbackRate = speed;
+    startBladeLoop();
+    anim.onfinish = function () {
+      phase.el.style.strokeDashoffset = "0";
+      phase.el.classList.remove("active");
+      if (phase.kind === "cut") phase.el.classList.add("done");
+      bladeOnPhase(phase, 1);
+      stopBladeLoop();
+      currentPhase = null;
+      anim = null;
+      if (phaseIndex >= phases.length - 1) {
+        finish();
+      } else {
+        cursor = phaseIndex + 1;
+        if (playing) {
+          startPhase(cursor);
+        } else {
+          updateProgress();
+          updateButtons();
+        }
+      }
+    };
+    updateProgress();
+    updateButtons();
+  }
+
+  function reset() {
+    cancelAnim();
+    playing = false;
+    finished = false;
+    phaseIndex = -1;
+    cursor = 0;
+    bladeAtStart();
+    phases.forEach(function (phase) {
+      phase.el.style.visibility = "hidden";
+      phase.el.style.strokeDashoffset = phase.len;
+      phase.el.classList.remove("active", "done");
+    });
+    statusEl.textContent = "Appuie sur « Lire » pour suivre le trajet de la lame.";
+    updateProgress();
+    updateButtons();
+  }
+
+  function play() {
+    if (finished) reset();
+    playing = true;
+    if (anim) {
+      anim.play();
+      startBladeLoop();
+      updateButtons();
+      return;
+    }
+    startPhase(cursor);
+  }
+
+  function pause() {
+    playing = false;
+    if (anim && anim.playState === "running") anim.pause();
+    updateButtons();
+  }
+
+  function seek(target) {
+    cancelAnim();
+    playing = false;
+    finished = false;
+    if (target >= phases.length) { finish(); return; }
+    phases.forEach(function (phase, i) {
+      phase.el.classList.remove("active");
+      if (i < target) {
+        phase.el.style.visibility = "visible";
+        phase.el.style.strokeDashoffset = "0";
+        if (phase.kind === "cut") phase.el.classList.add("done");
+      } else {
+        phase.el.style.visibility = "hidden";
+        phase.el.style.strokeDashoffset = phase.len;
+        phase.el.classList.remove("done");
+      }
+    });
+    phaseIndex = -1;
+    cursor = target;
+    if (target > 0 && phases[target - 1]) bladeOnPhase(phases[target - 1], 1);
+    else bladeAtStart();
+    statusEl.textContent = "Prêt : " + phaseText(phases[target]);
+    updateProgress();
+    updateButtons();
+  }
+
+  function next() {
+    var cur = currentStep();
+    seek(firstPhaseOf(Math.min(steps.length - 1, cur + 1)));
+  }
+
+  function prev() {
+    var cur = currentStep();
+    seek(firstPhaseOf(Math.max(0, cur - 1)));
+  }
+
+  function build() {
+    if (!args || !args.steps) return;
+    steps = args.steps || [];
+    phases = [];
+    ghost.innerHTML = "";
+    live.innerHTML = "";
+    sheetImg.src = args.image || "";
+    stage.style.setProperty("--ratio", num(args.plate_w) + " / " + num(args.plate_h));
+    svg.setAttribute("viewBox", "0 0 " + num(args.plate_w) + " " + num(args.plate_h));
+    plateLabel.textContent = "Planche " + args.sheet + " · " +
+      mm(args.plate_w) + " × " + mm(args.plate_h);
+    timeLabel.textContent = "Temps de coupe estimé : " + clock(args.cut_seconds);
+
+    steps.forEach(function (step, i) {
+      if (step.travel && step.travel.length === 2) {
+        var td = pathD(step.travel);
+        ghost.appendChild(el("path", "travel ghost", td));
+        var travel = el("path", "travel live", td);
+        live.appendChild(travel);
+        phases.push({ el: travel, kind: "travel", step: step, stepIndex: i,
+          duration: travelDuration(step) });
+      }
+      var cd = pathD(step.points || []);
+      if (!cd) return;
+      ghost.appendChild(el("path", "cut ghost", cd));
+      var cut = el("path", "cut live", cd);
+      live.appendChild(cut);
+      phases.push({ el: cut, kind: "cut", step: step, stepIndex: i,
+        duration: cutDuration(step) });
+    });
+    phases.forEach(prepare);
+    placeStartMark();
+    reset();
+    requestAnimationFrame(frameHeight);
+  }
+
+  playBtn.addEventListener("click", play);
+  pauseBtn.addEventListener("click", pause);
+  prevBtn.addEventListener("click", prev);
+  nextBtn.addEventListener("click", next);
+  resetBtn.addEventListener("click", reset);
+  speedSel.addEventListener("change", function () {
+    speed = num(speedSel.value) || 1;
+    if (anim) anim.playbackRate = speed;
+  });
+
+  window.addEventListener("message", function (event) {
+    var data = event.data;
+    if (!data || data.type !== "streamlit:render") return;
+    args = data.args || {};
+    document.body.dataset.theme = String(args.theme || "sober");
+    build();
+  });
+
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(frameHeight).observe(appEl);
+  }
+  window.addEventListener("resize", frameHeight);
+  [120, 400, 1200].forEach(function (delay) {
+    window.setTimeout(frameHeight, delay);
+  });
+})();
+</script>
+</body>
+</html>

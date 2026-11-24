@@ -5,7 +5,7 @@ Deux styles, sans aucun acces reseau (polices systeme uniquement) :
 - ``gift``  : chaleureux et colore, pour la version offerte avec l'imprimante ;
 - ``sober`` : neutre et sobre, pour l'usage quotidien.
 
-Le choix et le prenom affiche sur la carte sont memorises dans
+Le choix, le prenom affiche sur la carte et le mode simple sont memorises dans
 ``ui_prefs.json``, a cote de ``config.json``, pour survivre aux rechargements.
 Ce module n'importe pas Streamlit : il est testable sans interface.
 """
@@ -31,7 +31,7 @@ def prefs_path(base_dir: Path | str | None = None) -> Path:
 
 
 def load_ui_prefs(base_dir: Path | str | None = None) -> dict:
-    """Style, prenom et etat de l'intro (valeurs sures si le fichier est absent)."""
+    """Style, prenom, intro et mode simple (valeurs sures si fichier absent)."""
     try:
         data = json.loads(prefs_path(base_dir).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -46,6 +46,7 @@ def load_ui_prefs(base_dir: Path | str | None = None) -> dict:
         "style": style,
         "recipient": recipient,
         "intro_done": bool(data.get("intro_done", False)),
+        "simple_mode": bool(data.get("simple_mode", True)),
     }
 
 
@@ -54,9 +55,11 @@ def save_ui_prefs(base_dir: Path | str | None, prefs: dict) -> Path:
     if style not in STYLES:
         style = STYLE_GIFT
     recipient = str(prefs.get("recipient", DEFAULT_RECIPIENT) or "").strip()[:24]
-    # ``intro_done`` n'est pas fourni par les changements de theme : on conserve
-    # alors l'etat deja enregistre, sinon l'unboxing reviendrait a chaque clic.
-    intro_done = bool(prefs.get("intro_done", load_ui_prefs(base_dir)["intro_done"]))
+    # ``intro_done`` et ``simple_mode`` ne sont pas toujours fournis par les
+    # changements de theme : on conserve alors l'etat deja enregistre.
+    previous = load_ui_prefs(base_dir)
+    intro_done = bool(prefs.get("intro_done", previous["intro_done"]))
+    simple_mode = bool(prefs.get("simple_mode", previous["simple_mode"]))
     path = prefs_path(base_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -65,6 +68,7 @@ def save_ui_prefs(base_dir: Path | str | None, prefs: dict) -> Path:
                 "style": style,
                 "recipient": recipient,
                 "intro_done": intro_done,
+                "simple_mode": simple_mode,
             },
             indent=2,
             ensure_ascii=False,
@@ -130,6 +134,13 @@ def hero_html(style: str, recipient: str = DEFAULT_RECIPIENT) -> str:
 _BASE = """
 .block-container { padding-top: 1.1rem; padding-bottom: 3rem; max-width: 1460px; }
 .bc-hint { color: #666; font-size: 0.86rem; }
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+  gap: 0.3rem; overflow-x: auto; scrollbar-width: none;
+}
+[data-testid="stTabs"] [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
+[data-testid="stTabs"] [data-baseweb="tab"] {
+  white-space: nowrap; padding: 0.45rem 0.85rem;
+}
 """
 
 # Adaptations communes aux deux themes pour un vrai usage au telephone.
@@ -175,6 +186,9 @@ _MOBILE = """
   }
   [data-testid="stMain"] [data-testid="stFileUploaderDropzone"] button {
     width: 100%;
+  }
+  [data-testid="stTabs"] [data-baseweb="tab"] {
+    font-size: 0.84rem; padding: 0.4rem 0.6rem;
   }
 }
 """

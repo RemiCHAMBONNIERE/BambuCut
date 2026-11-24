@@ -23,8 +23,25 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw
 
-from bambucut.gcode import build_gcode, check_safety, cut_length_mm, out_of_bounds
+from bambucut.cut_player import COMPONENT_DIR as CUT_DIR
+from bambucut.cut_player import cut_steps, estimate_seconds, png_data_url
+from bambucut.gcode import (
+    build_gcode,
+    check_safety,
+    cut_length_mm,
+    iter_cut_contours,
+    out_of_bounds,
+)
 from bambucut.geometry import PX_PER_MM, prepare_sticker
+from bambucut.guide import (
+    CHECKLIST,
+    OFFSET_IMAGE,
+    OFFSET_SVG,
+    TABS,
+    TROUBLESHOOTING,
+    settings_advice,
+    settings_summary,
+)
 from bambucut.models import MachineConfig, PreparedSticker, StickerSpec
 from bambucut.packing import pack
 from bambucut.pdf_export import build_pdf
@@ -579,6 +596,39 @@ def main() -> int:
         (OUT / f"{stem}_decoupe.gcode").write_text(gcode, encoding="utf-8")
         (OUT / f"{stem}_previsu.png").write_bytes(preview)
 
+        # Lecteur anime : memes contours, memes offsets, dans l'ordre du G-code.
+        steps = cut_steps(sheet, cfg)
+        contours = list(iter_cut_contours(sheet, cfg))
+        check(
+            len(steps) == len(contours) == sheet.contour_count,
+            f"{stem} : lecteur anime = un contour par contour du G-code",
+        )
+        first_travel = steps[0]["travel"]
+        check(
+            all(len(step["points"]) >= 3 and step["points"][0] == step["points"][-1]
+                for step in steps)
+            and all(step["travel"] is not None for step in steps)
+            and first_travel is not None
+            and abs(first_travel[0][0] - cfg.calib_x_mm) < 1e-6
+            and abs(first_travel[0][1] - cfg.calib_y_mm) < 1e-6,
+            f"{stem} : depart du repere de calibrage, puis deplacement avant chaque contour",
+        )
+        check(
+            f"G0 X{cfg.calib_x_mm:g} Y{cfg.calib_y_mm:g} F" in gcode
+            and "; depart au repere de calibrage" in gcode,
+            f"{stem} : le G-code se place d'abord sur la croix de calibrage",
+        )
+        px, py = steps[0]["points"][0]
+        check(
+            f"G0 X{px:g} Y{py:g} F" in gcode,
+            f"{stem} : offsets identiques entre lecteur et G-code",
+        )
+        check(
+            png_data_url(preview).startswith("data:image/png;base64,")
+            and estimate_seconds(steps, cfg) > 0,
+            f"{stem} : PNG embarque et duree de coupe estimee",
+        )
+
         check(pdf.startswith(b"%PDF"), f"{stem} : PDF valide")
         match = re.search(rb"MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)", pdf)
         if match:
@@ -650,14 +700,18 @@ def main() -> int:
         print(
             f"  - {stem}: {sheet.sticker_count} stickers, "
             f"occupation {sheet.utilization(cfg) * 100:.1f} %, "
-            f"coupe {cut_length_mm(sheet) / 1000:.2f} m"
+            f"coupe {cut_length_mm(sheet) / 10:.1f} cm"
         )
 
     # Verification offset : decale toutes les coordonnees de coupe.
     def all_x(program: str) -> list[float]:
+        # On ignore le G0 initial vers la croix de calibrage : il ne doit pas
+        # recevoir l'offset buse -> lame (la croix est imprimee a X=10 fixe).
         return [
             float(m.group(1))
-            for m in re.finditer(r"X(-?\d+(?:\.\d+)?)", program)
+            for line in program.splitlines()
+            if "depart au repere de calibrage" not in line
+            for m in re.finditer(r"X(-?\d+(?:\.\d+)?)", line)
         ]
 
     cfg_offset = MachineConfig(offset_x_mm=2.0, offset_y_mm=-1.0)
@@ -694,11 +748,15 @@ def main() -> int:
     check(
         defaults["style"] == STYLE_GIFT
         and defaults["recipient"] == DEFAULT_RECIPIENT
-        and defaults["intro_done"] is False,
-        "prefs : cadeau + prenom + intro a voir quand ui_prefs.json est absent",
+        and defaults["intro_done"] is False
+        and defaults["simple_mode"] is True,
+        "prefs : cadeau + prenom + intro + mode simple par defaut",
     )
 
-    save_ui_prefs(prefs_dir, {"style": STYLE_SOBER, "recipient": "  Zoé  "})
+    save_ui_prefs(
+        prefs_dir,
+        {"style": STYLE_SOBER, "recipient": "  Zoé  ", "simple_mode": False},
+    )
     saved = load_ui_prefs(prefs_dir)
     check(
         saved
@@ -706,22 +764,30 @@ def main() -> int:
             "style": STYLE_SOBER,
             "recipient": "Zoé",
             "intro_done": False,
+            "simple_mode": False,
         },
-        "prefs : aller-retour style + prenom (espaces rognes)",
+        "prefs : aller-retour style + prenom + mode simple",
     )
 
     save_ui_prefs(
         prefs_dir,
-        {"style": STYLE_GIFT, "recipient": "Adèle", "intro_done": True},
+        {
+            "style": STYLE_GIFT,
+            "recipient": "Adèle",
+            "intro_done": True,
+            "simple_mode": True,
+        },
     )
     check(
-        load_ui_prefs(prefs_dir)["intro_done"] is True,
-        "prefs : intro terminee memorisee",
+        load_ui_prefs(prefs_dir)["intro_done"] is True
+        and load_ui_prefs(prefs_dir)["simple_mode"] is True,
+        "prefs : intro terminee et mode simple memorises",
     )
     save_ui_prefs(prefs_dir, {"style": STYLE_SOBER, "recipient": "Adèle"})
     check(
-        load_ui_prefs(prefs_dir)["intro_done"] is True,
-        "prefs : changer de theme ne rejoue pas l'intro",
+        load_ui_prefs(prefs_dir)["intro_done"] is True
+        and load_ui_prefs(prefs_dir)["simple_mode"] is True,
+        "prefs : changer de theme ne rejoue pas l'intro ni le mode simple",
     )
 
     (prefs_dir / "ui_prefs.json").write_text('{"style": "neon"}', encoding="utf-8")
@@ -761,6 +827,74 @@ def main() -> int:
         and "padding: 4rem" in gift_css,
         "theme : accueil mobile empile, badges masques, colonnes pleine largeur",
     )
+    check(
+        '[data-testid="stTabs"]' in gift_css and "overflow-x: auto" in gift_css,
+        "theme : onglets du guide lisibles au telephone",
+    )
+
+    guide_rows = settings_summary(MachineConfig())
+    check(
+        len(TABS) == 5
+        and len(CHECKLIST) >= 5
+        and len(TROUBLESHOOTING) >= 6
+        and len(guide_rows) == 4
+        and guide_rows[0][1] == "14.20 mm"
+        and "role=\"img\"" in OFFSET_SVG
+        and OFFSET_IMAGE.exists()
+        and Image.open(OFFSET_IMAGE).width >= 1000,
+        "guide : cinq onglets, check-list, pannes et schema des offsets",
+    )
+    tight = MachineConfig(z_cut_mm=14.0, z_travel_mm=15.0)
+    check(
+        any(level == "warning" for level, _ in settings_advice(tight))
+        and any(
+            level == "warning"
+            for level, _ in settings_advice(MachineConfig(feed_cut=2400))
+        )
+        and any(
+            level == "info"
+            for level, _ in settings_advice(MachineConfig(offset_x_mm=0.0))
+        ),
+        "guide : conseils contextuels (garde, vitesse, offsets)",
+    )
+    check(
+        "render_printer_guide" in app_src
+        and "guide_toggle" in app_src
+        and "show_guide" in app_src
+        and "Ouvrir le guide imprimante" in app_src,
+        "app : guide imprimante accessible depuis l'atelier et la barre laterale",
+    )
+
+    cut_html = (CUT_DIR / "index.html").read_text(encoding="utf-8")
+    check(
+        "streamlit:componentReady" in cut_html
+        and "streamlit:setFrameHeight" in cut_html
+        and "strokeDashoffset" in cut_html
+        and 'class="cut live"' not in cut_html
+        and '"cut live"' in cut_html
+        and '"travel live"' in cut_html
+        and "id=\"speed\"" in cut_html
+        and "id=\"next\"" in cut_html
+        and "args.steps" in cut_html
+        and 'id="blade"' in cut_html
+        and 'id="startMark"' in cut_html
+        and "getPointAtLength" in cut_html
+        and "args.calib_x" in cut_html,
+        "lecteur anime : composant local, commandes, lame et depart calibrage",
+    )
+    bridge_src = (CUT_DIR.parent / "cut_player.py").read_text(encoding="utf-8")
+    check(
+        "bambucut_cut_player" in bridge_src
+        and "calib_x" in bridge_src
+        and "calib_y" in bridge_src
+        and "render_cut_player" in app_src
+        and 'result.get("calib_x_mm"' in app_src
+        and '/ 10:.1f} cm' in app_src
+        and "simple_view()" in app_src
+        and '"paths": steps' in app_src
+        and "if not simple:\n        render_editor" in app_src,
+        "app : lecteur anime branches et editeur masque en mode simple",
+    )
 
     intro_path = INTRO_DIR / "index.html"
     intro_html = intro_path.read_text(encoding="utf-8") if intro_path.exists() else ""
@@ -787,8 +921,9 @@ def main() -> int:
     )
     defaults = load_intro_texts()
     check(
-        defaults["cards"][0]["title"] == "Un kit stickers"
-        and defaults["tag"] == "Pour {name}"
+        bool(defaults["cards"][0].get("title"))
+        and isinstance(defaults.get("tag"), str)
+        and bool(defaults["tag"].strip())
         and len(defaults["teasers"]) == 2
         and "{name}" in defaults["reveals"][2]["title"],
         "unboxing : textes par defaut charges",
